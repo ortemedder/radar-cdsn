@@ -1,0 +1,5 @@
+// Copia este archivo como mi_wifi.h y pon tu WiFi (2,4 GHz). mi_wifi.h no se sube a GitHub.
+#pragma once
+const char *WIFI_NOMBRE = "TU_WIFI";
+const char *WIFI_CLAVE  = "TU_CLAVE";
+// #define GIRAR_180 0   // quita las dos barras si quieres la pantalla sin girar

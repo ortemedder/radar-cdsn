@@ -1,0 +1,4 @@
+# No subir nunca la clave del WiFi
+radar/mi_wifi.h
+radar/wifi.h
+*.zip
