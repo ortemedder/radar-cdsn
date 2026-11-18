@@ -133,8 +133,8 @@ void pantallaFicha(int i) {
     tft.setTextColor(BLANCO); tft.drawString(t, x + 4, 268, 2);
   }
   // trafico
-  haceTexto(h, sizeof h, s.t);
-  snprintf(t, sizeof t, "TRAFICO HOY: %d naves - dato %s", s.trafHoy, h);
+  coma(h, sizeof h, s.media7);
+  snprintf(t, sizeof t, "PILOTOS hoy %d - ayer %d - media %s", s.traf[0], s.traf[1], h);
   tft.setTextColor(AZUL); corta(u, t, GRAF_BX - 12, 2); tft.drawString(u, 6, 296, 2);
   dibujaBotones(FICHA);
   boton(GRAF_BX, VOLVER_Y, GRAF_BW, VOLVER_H, fichaGrafica ? "FACCIONES" : "GRAFICA", NAR, 2);
@@ -181,5 +181,5 @@ void pantallaLista() {
 bool tocaLista(int x, int y) {
   int k = (y - LISTA_Y) / LISTA_PASO, j = pagLista * FILAS + k;
   if (y < LISTA_Y || k >= FILAS || j >= nLista) return false;
-  fichaDesdeLista = true; pantallaFicha(ordenLista[j]); return true;
+  fichaVuelve = LISTA; pantallaFicha(ordenLista[j]); return true;
 }

@@ -5,7 +5,8 @@
 #include <math.h>
 #include <time.h>
 
-#define MAX_SIS 120
+#define MAX_SIS 140       // limite de sistemas (se reserva lo que quepa, hasta este numero)
+#define DIAS_TRAF 9       // dias de trafico guardados: hoy, ayer y 7 mas para la media
 #define MAX_FAC 7
 #define MAX_HIST 10       // puntos de la grafica de influencia
 
@@ -21,6 +22,10 @@ struct Sis {
   bool confActivo, confPend;
   Fac f[MAX_FAC]; uint8_t nf;
   uint16_t trafHoy;
+  uint16_t traf[DIAS_TRAF]; // pilotos por dia: [0] hoy, [1] ayer...
+  uint8_t ataque;        // 0 nada, 1 ACTIVIDAD INUSUAL (pico de visitas), 2 POSIBLE ATAQUE (pico y baja la influencia)
+  bool picoAyer;         // el pico fue ayer (si no, hoy)
+  float media7;          // media de pilotos de los 7 dias anteriores al pico (o a hoy si no hay pico)
   long t;                // hora del dato
   uint8_t nivel;         // 0 nada, 1 aviso, 2 grave
   char alerta[20];       // titulo corto (MAYUSCULAS, sin tildes)
@@ -41,10 +46,11 @@ struct Sis {
 };
 
 struct Datos {
-  Sis s[MAX_SIS]; int n = 0;
+  Sis *s = nullptr; int cap = 0;   // tabla de sistemas (se reserva aparte) y cuantos caben
+  int n = 0, sinSitio = 0;         // sistemas leidos y los que no cupieron
   long t = 0;            // hora del archivo
   long tickGlobal = 0;   // ultimo tick de la galaxia (tick.edcd.io, via el escucha)
-  int controlados = 0, alertas = 0, trafHoy = 0;
+  int controlados = 0, alertas = 0, trafHoy = 0, ataques = 0, inusuales = 0;
 };
 
 // Quita tildes y pasa a ASCII (las fuentes de la pantalla no tienen tildes)
@@ -124,6 +130,44 @@ template <typename S> struct Lector {
   }
 };
 
+// ---------- dias: "AAAA-MM-DD" menos n dias (calendario civil, sin depender de la hora del sistema) ----------
+static long diasDesdeCivil(int y, int m, int d) {
+  y -= m <= 2; long era = (y >= 0 ? y : y - 399) / 400; long yoe = y - era * 400;
+  long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1; long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + doe - 719468;
+}
+static void diaMenos(char *o, const char *hoy, int n) {
+  int y = 0, m = 0, d = 0;
+  if (sscanf(hoy, "%d-%d-%d", &y, &m, &d) != 3 || y < 2000) { strcpy(o, "0000-00-00"); return; }
+  long z = diasDesdeCivil(y, m, d) - n + 719468;
+  long era = (z >= 0 ? z : z - 146096) / 146097; long doe = z - era * 146097;
+  long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  long mp = (5 * doy + 2) / 153; int dd = doy - (153 * mp + 2) / 5 + 1, mm = mp < 10 ? mp + 3 : mp - 9;
+  int yy = yoe + era * 400 + (mm <= 2);
+  snprintf(o, 11, "%04d-%02d-%02d", yy, mm, dd);
+}
+
+// Pico de visitas (mismas reglas que la web): hoy o ayer al menos 5 pilotos y el triple de la media
+// de los 7 dias anteriores. Si ademas la influencia baja 1 punto o mas desde ayer: posible ataque.
+static void calculaPico(Sis &s) {
+  s.ataque = 0; s.picoAyer = false;
+  for (int k = 0; k <= 1; k++) {
+    float m = 0; for (int i = k + 1; i <= k + 7; i++) m += s.traf[i];
+    m /= 7;
+    if (k == 0) s.media7 = m;
+    if (s.traf[k] >= 5 && s.traf[k] >= 3 * (m > 1 ? m : 1)) {
+      s.media7 = m; s.picoAyer = k == 1;
+      s.ataque = (!isnan(s.prev) && s.prev - s.inf >= 1.0f) ? 2 : 1;
+      return;
+    }
+  }
+}
+static void textoPico(char *d, size_t n, const Sis &s) {     // "25 pilotos ayer (media 4.4), baja 1.2"
+  int v = s.traf[s.picoAyer ? 1 : 0];
+  if (s.ataque == 2) snprintf(d, n, "%d pilotos %s (media %.1f), baja %.1f", v, s.picoAyer ? "ayer" : "hoy", s.media7, s.prev - s.inf);
+  else snprintf(d, n, "%d pilotos %s (media %.1f)", v, s.picoAyer ? "ayer" : "hoy", s.media7);
+}
+
 // Filtro de UN sistema: solo se guarda lo que se pinta
 static void preparaFiltro(JsonDocument &f) {
   for (const char *k : {"sys","t","inf","ctrl","fuera","activos","pendientes","recuperando","segunda","segunda_inf","prev","trafico",
@@ -170,12 +214,16 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
     strcpy(s.alerta, "VENTAJA BAJA");
     snprintf(s.aviso, sizeof s.aviso, "solo %.1f puntos sobre %s", s.inf - seg, tmp); s.nivel = 2; return;
   }
-  // 4) bajada fuerte desde ayer
+  // 4) posible ataque: pico de visitas y baja la influencia
+  if (s.ataque == 2) { strcpy(s.alerta, "POSIBLE ATAQUE"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 2; return; }
+  // 5) bajada fuerte desde ayer
   if (!isnan(s.prev) && s.prev - s.inf >= 3.0f) {
     strcpy(s.alerta, "BAJADA");
     snprintf(s.aviso, sizeof s.aviso, "%.1f puntos desde ayer", s.inf - s.prev); s.nivel = 1; return;
   }
-  // 5) expansion pendiente
+  // 6) actividad inusual: pico de visitas sin bajada
+  if (s.ataque == 1) { strcpy(s.alerta, "ACTIVIDAD INUSUAL"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 1; return; }
+  // 7) expansion pendiente
   if (contiene(pen, "Expansion")) {
     strcpy(s.alerta, "EXPANSION PEND.");
     if (seg > 0) { ascii(tmp, o["segunda"] | "?", sizeof tmp);
@@ -198,7 +246,11 @@ static void llenaSistema(Sis &s, JsonObjectConst o, const char *clave, const cha
   lista(s.act, sizeof s.act, o["activos"]);
   lista(s.pend, sizeof s.pend, o["pendientes"]);
   lista(s.rec, sizeof s.rec, o["recuperando"]);
-  s.trafHoy = o["trafico"][hoy] | 0;
+  for (int k = 0; k < DIAS_TRAF; k++) {                  // trafico de hoy hacia atras
+    char dia[11]; diaMenos(dia, hoy, k);
+    s.traf[k] = o["trafico"][dia] | 0;
+  }
+  s.trafHoy = s.traf[0];
   s.tickUlt = (long)(o["tick_ult"] | 0.0);  s.tickProx = (long)(o["tick_prox"] | 0.0);
   s.tickMarg = o["tick_marg"].isNull() ? -1 : o["tick_marg"].as<int>();
   s.tickDisp = o["tick_disp"].isNull() ? -1 : o["tick_disp"].as<int>();
@@ -214,6 +266,7 @@ static void llenaSistema(Sis &s, JsonObjectConst o, const char *clave, const cha
     ascii(s.f[s.nf].n, f["n"] | "?", sizeof s.f[0].n);
     s.f[s.nf].inf = f["inf"] | 0.0f; s.nf++;
   }
+  calculaPico(s);
   for (int i = 1; i < s.nf; i++)            // ordenar de mayor a menor
     for (int j = i; j > 0 && s.f[j].inf > s.f[j - 1].inf; j--) { Fac t = s.f[j]; s.f[j] = s.f[j - 1]; s.f[j - 1] = t; }
   calculaAlerta(s, o);
@@ -226,7 +279,7 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
   if (!L.busca("\"sistemas\"") || L.salta() != ':' || L.salta() != '{') { snprintf(err, errmax, "JSON: sin sistemas"); return false; }
   JsonDocument filtro; preparaFiltro(filtro);
   JsonDocument doc;                                  // un solo sistema cada vez
-  int n = 0, ctrl = 0, al = 0, traf = 0;
+  int n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, sin = 0;
   char clave[48];
   while (true) {
     int c = L.salta();
@@ -240,17 +293,18 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
     DeserializationError e = deserializeJson(doc, L, DeserializationOption::Filter(filtro));
     if (e) { snprintf(err, errmax, "JSON %s: %s", clave, e.c_str()); return false; }
     JsonObjectConst o = doc.as<JsonObjectConst>();
-    if ((o["fuera"] | false) || o["inf"].isNull() || n >= MAX_SIS) continue;   // ya no esta la faccion
+    if ((o["fuera"] | false) || o["inf"].isNull()) continue;   // ya no esta la faccion
+    if (n >= d.cap) { sin++; continue; }                        // no cabe: se cuenta para avisar
     Sis &s = d.s[n];
     llenaSistema(s, o, clave, hoy);
-    ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy;
+    ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy; at += s.ataque == 2; inu += s.ataque == 1;
     n++;
   }
   // despues de "sistemas" vienen la hora del archivo y el tick global
   long t = 0, tg = 0;
   if (L.busca("\"t\"") && L.salta() == ':') t = (long)L.numero();
   if (L.busca("\"tick_global\"") && L.salta() == ':') tg = (long)L.numero();
-  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf;
+  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.sinSitio = sin;
   d.t = t; d.tickGlobal = tg;
   return true;
 }

@@ -9,6 +9,7 @@
 //   botones.h  tabla de botones                mapa.h    radar, nombres y aros
 //   panel.h    titulo, panel y alertas         ficha.h   ficha de sistema y lista
 //   red.h      WiFi y descarga                 mi_wifi.h TU WiFi (no se toca al actualizar)
+//   visitas.h  paginas VISITAS y RESUMEN, salvapantallas (carrusel)
 
 #include <new>
 #include "config.h"
@@ -18,12 +19,15 @@
 #include "panel.h"
 #include "ficha.h"
 #include "red.h"
+#include "visitas.h"
 
 void toque(int x, int y) {
   if (pulsaBoton(x, y)) return;                    // botones de la tabla (todas las pantallas)
   if (modo == LISTA) { tocaLista(x, y); return; }
+  if (modo == VISITAS) { tocaVisitas(x, y); return; }
+  if (modo == RESUMEN) { pantallaMapa(); return; }  // cualquier toque: al mapa
   if (modo != MAPA) return;
-  fichaDesdeLista = false;
+  fichaVuelve = MAPA;
   for (int k = 0; k < AL_N; k++) {                 // cajas de alerta
     int i = orden[pagAlerta * AL_N + k];
     if (i >= 0 && dentro(x, y, PX, AL_Y + k * AL_PASO, PW, AL_H + 2)) { pantallaFicha(i); return; }
@@ -65,9 +69,15 @@ void presentacion() {
 void setup() {
   Serial.begin(115200);
   Serial.println("RADAR CDSN " VERSION);
-  Serial.printf("RAM libre %u (bloque mayor %u), tabla de sistemas %u bytes\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(), (unsigned)sizeof(Datos));
-  pDatos = (Datos *)calloc(1, sizeof(Datos));      // tabla de sistemas
-  if (pDatos) new (pDatos) Datos();
+  Serial.printf("RAM libre %u (bloque mayor %u), cada sistema %u bytes\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(), (unsigned)sizeof(Sis));
+  pDatos = new (std::nothrow) Datos();
+  for (int cap = MAX_SIS; pDatos && cap >= 60 && !pDatos->s; cap -= 10) {   // tabla de sistemas: hasta MAX_SIS, o lo que quepa
+    pDatos->s = (Sis *)calloc(cap, sizeof(Sis));
+    if (pDatos->s) pDatos->cap = cap;
+  }
+  if (pDatos && !pDatos->s) { delete pDatos; pDatos = nullptr; }
+  if (pDatos) Serial.printf("Tabla para %d sistemas (%u bytes), RAM libre %u (bloque mayor %u)\n", pDatos->cap,
+                            (unsigned)(pDatos->cap * sizeof(Sis)), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   pinMode(BOTON_BOOT, INPUT_PULLUP);
   tft.init(); tft.setRotation(GIRAR_180 ? 3 : 1); tft.setTouch(CAL);
   colores();
@@ -108,8 +118,11 @@ void loop() {
   bool t = tft.getTouch(&x, &y);
   if (t && GIRAR_180) { x = ANCHO - 1 - x; y = ALTO - 1 - y; }   // el tactil se calibro sin girar
   if (t) { ux = x; uy = y; tSuelta = m; }
+  if (t) tUltToque = m;
   if (t && !tocando) { tocando = true; tToque = m; largo = false;
-    if (modo == APAGADA) { largo = true; pantallaMapa(); } }
+    if (modo == APAGADA) { largo = true; pantallaMapa(); }
+    else if (carrusel) { largo = true; if (modo != MAPA) pantallaMapa(); }   // el toque solo quita el salvapantallas
+    carrusel = false; }
   if (t && tocando && !largo && m - tToque > 1500) { largo = true; apagar(); }
   if (!t && tocando && m - tSuelta > 80) { tocando = false; if (!largo && modo != APAGADA) toque(ux, uy); }
 
@@ -117,8 +130,10 @@ void loop() {
   if (m - tDescarga > CADA_MS) actualiza(false);
   if (!hayDatos) return;
 
+  tickCarrusel(m);
   if (modo == MAPA) {
     if (m - tPaso >= MS_PASO) { tPaso = m; tickMapa(); }
     if (m - tReloj > 30000) { tReloj = m; titulo("RADAR CDSN"); panelTick(); }
-  } else if ((modo == FICHA || modo == LISTA) && millis() - tFicha > 60000) pantallaMapa();   // vuelve sola al minuto
+  } else if (modo == RESUMEN && m - tReloj > 30000) { tReloj = m; pantallaResumen(false); }   // hora al dia
+  else if (!carrusel && modo != APAGADA && millis() - tFicha > 60000) pantallaMapa();   // ficha, lista y paginas: vuelven solas al minuto
 }

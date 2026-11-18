@@ -6,7 +6,7 @@
 #include <TFT_eSPI.h>
 #include "datos.h"
 
-#define VERSION "v2.3b"      // subir el numero en cada cambio
+#define VERSION "v2.4"      // subir el numero en cada cambio
 #if CONFIG_IDF_TARGET_ESP32S3
 #error "Este radar es para el ESP32 normal: Herramientas -> Placa -> ESP32 Dev Module"
 #endif
@@ -50,6 +50,13 @@ const int LSIG_X = 6, LSIG_W = 200;
 const int GRAF_BX = 256, GRAF_BW = 106;           // boton GRAFICA / FACCIONES de la ficha
 const int GRAF_X = 6, GRAF_Y = 158, GRAF_W = 470, GRAF_H = 88;   // zona de la grafica
 
+// visitas (pagina de pilotos por sistema)
+const int VLIS_Y = 66, VFILAS = 11;               // primera fila y filas por pagina (paso LISTA_PASO)
+
+// salvapantallas: sin tocar 5 min, carrusel de 4 min (mapa 50 %, visitas 25 %, resumen 25 %)
+const uint32_t CARRUSEL_ESPERA = 5UL * 60 * 1000;
+const uint32_t CAR_MAPA_S = 120, CAR_VIS_S = 60, CAR_RES_S = 60;   // segundos de cada pantalla
+
 // barrido
 const int N_ESTELA = 14, PASO = 4;                 // grados por paso; 90 pasos = 1 vuelta
 const uint32_t MS_PASO = 4000 / (360 / PASO);      // una vuelta cada 4 s
@@ -63,12 +70,13 @@ uint16_t estela[N_ESTELA];
 float SENO[360], COSENO[360];                      // tablas: se calculan una vez
 
 // ---------- estado ----------
-enum Modo : uint8_t { MAPA, FICHA, LISTA, APAGADA };
+enum Modo : uint8_t { MAPA, FICHA, LISTA, VISITAS, RESUMEN, APAGADA };
 Modo modo = MAPA;
 int zoomDef = 6, zoom = 6;
 float centroX = 0, centroZ = 0, defX = 0, defZ = 0;
 int fichaSis = -1, angulo = 0, estadoWifi = 0;
-bool pausa = false, hayDatos = false, fichaDesdeLista = false, fichaGrafica = false;
+bool pausa = false, hayDatos = false, fichaGrafica = false;
+Modo fichaVuelve = MAPA;                           // a donde vuelve VOLVER de la ficha
 int fasePulso = 0, radioAro = 8;                   // latido de los aros rojos (radio 8..13)
 uint32_t tPaso = 0, tDescarga = 0, tParpadeo = 0, tReloj = 0, tFicha = 0;
 char ultimoError[64] = "";
@@ -76,8 +84,12 @@ int orden[MAX_SIS], pagAlerta = 0;                 // alertas ordenadas y pagina
 int ordenLista[MAX_SIS], nLista = 0, pagLista = 0; // lista de controlados
 uint32_t alertasAntes[MAX_SIS]; int nAntes = -1;   // alertas de la descarga anterior (hash del nombre)
 uint32_t nuevas[MAX_SIS]; int nNuevas = 0;         // alertas nuevas aun no vistas
+int ordenVis[MAX_SIS], nVis = 0, pagVis = 0;       // pagina VISITAS
+bool carrusel = false;                             // salvapantallas en marcha
+uint32_t tUltToque = 0, tCarrusel = 0;
 
 // ---------- funciones que se usan antes de definirse ----------
 void pantallaMapa(); void pantallaFicha(int i); void pantallaLista(); void panel();
+void pantallaVisitas(); void pantallaResumen(bool mover);
 void titulo(const char *izq, const char *extra = nullptr);
 void ordenaAlertas(); void iconoWifi(int e);
