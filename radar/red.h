@@ -48,6 +48,7 @@ void actualiza(bool primera) {
   if (ok) ordenaAlertas();
   if (recientes && modo != APAGADA) destello();
   if (recientes && carrusel) { tCarrusel = millis(); modo = MAPA; }   // alerta nueva: el carrusel vuelve al mapa
+  if (ok) revisaAtaques();                         // posible ataque nuevo: pantalla de alerta (aunque estuviera en negro)
   if (!hayDatos) {
     tft.fillScreen(TFT_BLACK); titulo("RADAR CDSN");
     tft.setTextColor(ROJO); tft.setTextDatum(MC_DATUM);
@@ -60,5 +61,6 @@ void actualiza(bool primera) {
   else if (modo == LISTA) pantallaLista();
   else if (modo == VISITAS) pantallaVisitas();
   else if (modo == RESUMEN) pantallaResumen(false);
+  else if (modo == ALERTA) pantallaAlerta();
   if (!ok && modo == MAPA) titulo("RADAR CDSN", ultimoError);
 }

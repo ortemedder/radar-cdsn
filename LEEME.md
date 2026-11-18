@@ -89,3 +89,6 @@ Imágenes de prueba en `imagenes/`.
   Página RESUMEN (tocar el título de VISITAS): hora grande, próximo tick, controlados, alertas, pilotos de hoy y sistemas en peligro; cualquier toque vuelve al mapa.
   Salvapantallas: a los 5 min sin tocar, carrusel de 4 min (mapa 2 min, visitas 1 min, resumen 1 min); un toque lo quita y vuelve al mapa; una alerta nueva lo devuelve al mapa.
   Hasta 140 sistemas (si no hay memoria para 140, reserva lo que quepa de 10 en 10 y lo dice por el Monitor Serie; si la facción no cabe, RESUMEN avisa en rojo).
+- v2.5: pantalla de alerta POSIBLE ATAQUE: sale sola cuando aparece un posible ataque nuevo (enciende la pantalla aunque esté en negro), con marco rojo que late, pilotos, influencia y próximo tick;
+  se queda hasta pulsar VISTO o VER FICHA (SIGUIENTE si hay varios). Mientras haya algún posible ataque, el carrusel la incluye 30 s en cada vuelta.
+  VISITAS solo muestra los sistemas con alguna visita en los últimos 5 días (y siempre los que tienen pico).
