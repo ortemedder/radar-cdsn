@@ -67,21 +67,26 @@ void vista(int i) {               // al abrir su ficha deja de ser "nueva"
 void destello() { for (int i = 0; i < 3; i++) { tft.invertDisplay(true); delay(150); tft.invertDisplay(false); delay(150); } }
 
 // ---------- panel derecho ----------
-void panelTick() {               // proximo tick: el del sistema mas cercano si es fiable; si no, el de la galaxia
+// proximo tick: el del sistema mas cercano si es fiable; si no, el de la galaxia (pm = 0 si no se sabe)
+void calculaTick(long &pm, int &mejor, bool &global) {
   const int FIABLE = 180;        // +- minutos maximos para fiarse de la prevision de un sistema
-  int mejor = -1; long pm = 0;
+  mejor = -1; pm = 0; global = false;
   for (int i = 0; i < datos.n; i++) {
     const Sis &s = datos.s[i];
     if (s.tickDisp < 0 || s.tickDisp > FIABLE) continue;
     long p = proxTick(s);
     if (p && (!pm || p < pm)) { pm = p; mejor = i; }
   }
-  bool global = false;
   if (mejor < 0 && datos.tickGlobal && ahora()) {          // respaldo: tick global + 24 h
     pm = datos.tickGlobal + 86400;
     while (pm < ahora() - 1800) pm += 86400;
     global = true;
   }
+}
+
+void panelTick() {
+  long pm; int mejor; bool global;
+  calculaTick(pm, mejor, global);
   char t[48], h[8], d[16];
   tft.fillRect(PX, TICK_Y, ANCHO - PX, BOT_Y - TICK_Y - 1, TFT_BLACK);
   tft.setTextDatum(TL_DATUM); tft.setTextColor(VERDE); tft.drawString("PROX. TICK", PX + 2, TICK_Y, 2);
@@ -129,7 +134,7 @@ void panel() {
     snprintf(t, sizeof t, "%d/%d   siguientes >", pagAlerta + 1, pags);
     tft.setTextColor(NAR); tft.setTextDatum(MC_DATUM); tft.drawString(t, PX + PW / 2, SIG_Y + SIG_H / 2, 2);
   }
-  tft.setTextDatum(TL_DATUM); tft.setTextColor(VERDE); tft.drawString("TRAFICO HOY", PX + 2, TRAF_Y + 4, 2);
+  tft.setTextDatum(TL_DATUM); tft.setTextColor(VERDE); tft.drawString("TRAFICO HOY >", PX + 2, TRAF_Y + 4, 2);
   snprintf(t, sizeof t, "%d", datos.trafHoy);
   tft.setTextDatum(TR_DATUM); tft.setTextColor(AZUL); tft.drawString(t, ANCHO - 4, TRAF_Y - 2, 4);
   panelTick();

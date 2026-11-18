@@ -37,8 +37,8 @@ Señales a 3,3 V: compatibles directamente. Nunca 5 V a un pin de datos.
 - `radar/`: EL RADAR. Necesita además la librería **ArduinoJson** (de Benoit Blanchon, versión 7).
   Poner el nombre y la clave del WiFi (2,4 GHz) al principio de `radar.ino`.
   Lee faccion.json con filtro (solo lo que se pinta, ~50 KB de RAM).
-- Alertas: guerra/elecciones activas o pendientes, retirada, ventaja < 5 puntos en un controlado (graves, aro ROJO que late);
-  bajada ≥ 3 puntos desde ayer y expansión pendiente (avisos, aro AMARILLO fijo).
+- Alertas: guerra/elecciones activas o pendientes, retirada, ventaja < 5 puntos en un controlado, POSIBLE ATAQUE (graves, aro ROJO que late);
+  bajada ≥ 3 puntos desde ayer, ACTIVIDAD INUSUAL y expansión pendiente (avisos, aro AMARILLO fijo).
 - Manejo: tocar sistema o caja de alerta = ficha; tocar vacío = centrar ahí; + / − zoom; C = vista inicial;
   BOOT = pausa del barrido; pulsación larga (1,5 s) = pantalla en negro (otro toque la enciende); la ficha vuelve sola al minuto.
 
@@ -84,3 +84,8 @@ Imágenes de prueba en `imagenes/`.
 - v2.2c: el mapa en memoria va en dos mitades de 21,6 KB (caben en la RAM troceada tras la descarga); si no hay sitio, reintenta cada 5 s.
 - v2.3: faccion.json se lee sistema a sistema (sin cargarlo entero): arregla JSON NoMemory al crecer la facción (ya 91 sistemas); se ignoran los sistemas donde CDSN ya no está.
 - v2.3b: la tabla de sistemas se reserva en setup(); si no hay memoria lo dice en pantalla en vez de reiniciarse.
+- v2.4: aviso POSIBLE ATAQUE / ACTIVIDAD INUSUAL por pico de visitas, con las mismas reglas que la web (hoy o ayer ≥ 5 pilotos y ≥ 3 veces la media de los 7 días anteriores; si además la influencia baja ≥ 1 punto desde ayer, POSIBLE ATAQUE).
+  Página VISITAS (tocar el título del mapa o «TRAFICO HOY >»): sistemas por pilotos de hoy, ayer y media de 7 días, primero los que están en peligro; tocar una fila abre su ficha.
+  Página RESUMEN (tocar el título de VISITAS): hora grande, próximo tick, controlados, alertas, pilotos de hoy y sistemas en peligro; cualquier toque vuelve al mapa.
+  Salvapantallas: a los 5 min sin tocar, carrusel de 4 min (mapa 2 min, visitas 1 min, resumen 1 min); un toque lo quita y vuelve al mapa; una alerta nueva lo devuelve al mapa.
+  Hasta 140 sistemas (si no hay memoria para 140, reserva lo que quepa de 10 en 10 y lo dice por el Monitor Serie; si la facción no cabe, RESUMEN avisa en rojo).

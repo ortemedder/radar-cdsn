@@ -14,10 +14,13 @@ void accZoomMenos() { if (zoom > 0) { zoom--; pantallaMapa(); } }
 void accCentro()    { zoom = zoomDef; centroX = defX; centroZ = defZ; pantallaMapa(); }
 void accLista()     { pagLista = 0; pantallaLista(); }
 void accSigAlerta() { if (datos.alertas > AL_N) { pagAlerta = (pagAlerta + 1) % ((datos.alertas + AL_N - 1) / AL_N); panel(); } }
-void accVolverFicha() { if (fichaDesdeLista) pantallaLista(); else pantallaMapa(); }
+void accVolverFicha() { if (fichaVuelve == LISTA) pantallaLista(); else if (fichaVuelve == VISITAS) pantallaVisitas(); else pantallaMapa(); }
 void accMapa()      { pantallaMapa(); }
 void accSigLista()  { pagLista++; pantallaLista(); }
 void accGrafica()   { fichaGrafica = !fichaGrafica; pantallaFicha(fichaSis); }
+void accVisitas()   { pagVis = 0; pantallaVisitas(); }
+void accResumen()   { pantallaResumen(true); }
+void accSigVis()    { pagVis++; pantallaVisitas(); }
 
 const Boton BOTONES[] = {
   {MAPA,  PX,                BOT_Y, BOT_W, BOT_H, "+", accZoomMas},
@@ -29,6 +32,11 @@ const Boton BOTONES[] = {
   {FICHA, GRAF_BX, VOLVER_Y, GRAF_BW, VOLVER_H, nullptr, accGrafica},  // GRAFICA / FACCIONES (texto cambia)
   {LISTA, VOLVER_X, VOLVER_Y, VOLVER_W, VOLVER_H, "VOLVER", accMapa},
   {LISTA, LSIG_X, VOLVER_Y, LSIG_W, VOLVER_H, nullptr, accSigLista}, // siguientes de la lista
+  {MAPA,  PX, TRAF_Y, PW, TICK_Y - TRAF_Y - 2, nullptr, accVisitas}, // TRAFICO HOY > = pagina VISITAS
+  {VISITAS, VOLVER_X, VOLVER_Y, VOLVER_W, VOLVER_H, "VOLVER", accMapa},
+  {VISITAS, LSIG_X, VOLVER_Y, LSIG_W, VOLVER_H, nullptr, accSigVis},   // siguientes de visitas
+  {MAPA,  0, 0, ANCHO, TIT_H - 4, nullptr, accVisitas},              // titulo: mapa -> visitas -> resumen
+  {VISITAS, 0, 0, ANCHO, TIT_H - 4, nullptr, accResumen},
 };
 const int NBOT = sizeof(BOTONES) / sizeof(BOTONES[0]);
 
