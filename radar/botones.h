@@ -21,6 +21,15 @@ void accGrafica()   { fichaGrafica = !fichaGrafica; pantallaFicha(fichaSis); }
 void accVisitas()   { pagVis = 0; pantallaVisitas(); }
 void accResumen()   { pantallaResumen(true); }
 void accSigVis()    { pagVis++; pantallaVisitas(); }
+int buscaHash(uint32_t h) { for (int i = 0; i < datos.n; i++) if (hashNombre(datos.s[i].nom) == h) return i; return -1; }
+int sigAtaque(uint32_t h) {                        // siguiente posible ataque despues de h (da la vuelta); -1 si no hay
+  int i0 = buscaHash(h);
+  for (int k = 1; k <= datos.n; k++) { int i = (i0 + k + datos.n) % datos.n; if (datos.s[i].ataque == 2) return i; }
+  return -1;
+}
+void accAleFicha()  { alertaFija = false; int i = buscaHash(alertaHash); fichaVuelve = MAPA; if (i >= 0) pantallaFicha(i); else pantallaMapa(); }
+void accAleSig()    { if (datos.ataques > 1) { int i = sigAtaque(alertaHash); if (i >= 0) alertaHash = hashNombre(datos.s[i].nom); pantallaAlerta(); } }
+void accAleVisto()  { alertaFija = false; pantallaMapa(); }
 
 const Boton BOTONES[] = {
   {MAPA,  PX,                BOT_Y, BOT_W, BOT_H, "+", accZoomMas},
@@ -37,6 +46,9 @@ const Boton BOTONES[] = {
   {VISITAS, LSIG_X, VOLVER_Y, LSIG_W, VOLVER_H, nullptr, accSigVis},   // siguientes de visitas
   {MAPA,  0, 0, ANCHO, TIT_H - 4, nullptr, accVisitas},              // titulo: mapa -> visitas -> resumen
   {VISITAS, 0, 0, ANCHO, TIT_H - 4, nullptr, accResumen},
+  {ALERTA, ALE_B1, ALE_BY, ALE_BW, ALE_BH, "VER FICHA", accAleFicha},
+  {ALERTA, ALE_B2, ALE_BY, ALE_BW, ALE_BH, nullptr, accAleSig},      // SIGUIENTE (solo si hay mas de uno)
+  {ALERTA, ALE_B3, ALE_BY, ALE_BW, ALE_BH, nullptr, accAleVisto},    // VISTO (relleno rojo, se dibuja aparte)
 };
 const int NBOT = sizeof(BOTONES) / sizeof(BOTONES[0]);
 
@@ -49,7 +61,7 @@ void boton(int x, int y, int w, int h, const char *txt, uint16_t c, int fuente =
 
 void dibujaBotones(Modo m) {
   for (int i = 0; i < NBOT; i++)
-    if (BOTONES[i].pantalla == m && BOTONES[i].txt) boton(BOTONES[i].x, BOTONES[i].y, BOTONES[i].w, BOTONES[i].h, BOTONES[i].txt, NAR);
+    if (BOTONES[i].pantalla == m && BOTONES[i].txt) boton(BOTONES[i].x, BOTONES[i].y, BOTONES[i].w, BOTONES[i].h, BOTONES[i].txt, NAR, m == ALERTA ? 2 : 4);
 }
 
 bool pulsaBoton(int x, int y) {                    // 4 px de margen alrededor para acertar mejor

@@ -6,7 +6,7 @@
 #include <TFT_eSPI.h>
 #include "datos.h"
 
-#define VERSION "v2.4"      // subir el numero en cada cambio
+#define VERSION "v2.5"      // subir el numero en cada cambio
 #if CONFIG_IDF_TARGET_ESP32S3
 #error "Este radar es para el ESP32 normal: Herramientas -> Placa -> ESP32 Dev Module"
 #endif
@@ -52,10 +52,16 @@ const int GRAF_X = 6, GRAF_Y = 158, GRAF_W = 470, GRAF_H = 88;   // zona de la g
 
 // visitas (pagina de pilotos por sistema)
 const int VLIS_Y = 66, VFILAS = 11;               // primera fila y filas por pagina (paso LISTA_PASO)
+const int DIAS_LISTA = 5;                          // salen los sistemas con alguna visita en estos dias (o con pico)
+
+// pantalla de alerta POSIBLE ATAQUE
+const int ALE_BY = 274, ALE_BW = 140, ALE_BH = 40; // botones VER FICHA / SIGUIENTE / VISTO
+const int ALE_B1 = 14, ALE_B2 = 170, ALE_B3 = 326;
 
 // salvapantallas: sin tocar 5 min, carrusel de 4 min (mapa 50 %, visitas 25 %, resumen 25 %)
 const uint32_t CARRUSEL_ESPERA = 5UL * 60 * 1000;
 const uint32_t CAR_MAPA_S = 120, CAR_VIS_S = 60, CAR_RES_S = 60;   // segundos de cada pantalla
+const uint32_t CAR_ALE_S = 30;                     // alerta de posible ataque (solo mientras haya alguno)
 
 // barrido
 const int N_ESTELA = 14, PASO = 4;                 // grados por paso; 90 pasos = 1 vuelta
@@ -70,7 +76,7 @@ uint16_t estela[N_ESTELA];
 float SENO[360], COSENO[360];                      // tablas: se calculan una vez
 
 // ---------- estado ----------
-enum Modo : uint8_t { MAPA, FICHA, LISTA, VISITAS, RESUMEN, APAGADA };
+enum Modo : uint8_t { MAPA, FICHA, LISTA, VISITAS, RESUMEN, ALERTA, APAGADA };
 Modo modo = MAPA;
 int zoomDef = 6, zoom = 6;
 float centroX = 0, centroZ = 0, defX = 0, defZ = 0;
@@ -87,9 +93,12 @@ uint32_t nuevas[MAX_SIS]; int nNuevas = 0;         // alertas nuevas aun no vist
 int ordenVis[MAX_SIS], nVis = 0, pagVis = 0;       // pagina VISITAS
 bool carrusel = false;                             // salvapantallas en marcha
 uint32_t tUltToque = 0, tCarrusel = 0;
+uint32_t ataqAntes[MAX_SIS]; int nAtaqAntes = 0;   // posibles ataques de la descarga anterior (hash del nombre)
+uint32_t alertaHash = 0;                           // sistema que sale en la pantalla de alerta
+bool alertaFija = false;                           // alerta nueva: se queda hasta pulsar VISTO o VER FICHA
 
 // ---------- funciones que se usan antes de definirse ----------
 void pantallaMapa(); void pantallaFicha(int i); void pantallaLista(); void panel();
-void pantallaVisitas(); void pantallaResumen(bool mover);
+void pantallaVisitas(); void pantallaResumen(bool mover); void pantallaAlerta(); void revisaAtaques();
 void titulo(const char *izq, const char *extra = nullptr);
 void ordenaAlertas(); void iconoWifi(int e);

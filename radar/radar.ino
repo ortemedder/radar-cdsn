@@ -26,6 +26,7 @@ void toque(int x, int y) {
   if (modo == LISTA) { tocaLista(x, y); return; }
   if (modo == VISITAS) { tocaVisitas(x, y); return; }
   if (modo == RESUMEN) { pantallaMapa(); return; }  // cualquier toque: al mapa
+  if (modo == ALERTA) return;                      // solo los botones
   if (modo != MAPA) return;
   fichaVuelve = MAPA;
   for (int k = 0; k < AL_N; k++) {                 // cajas de alerta
@@ -41,7 +42,7 @@ void toque(int x, int y) {
   }
 }
 
-void apagar() { modo = APAGADA; tft.fillScreen(TFT_BLACK); }
+void apagar() { modo = APAGADA; alertaFija = false; tft.fillScreen(TFT_BLACK); }
 
 void colores() {
   NAR = tft.color565(255, 140, 0);    NAR_MED = tft.color565(170, 95, 10);  NAR_OSC = tft.color565(80, 45, 0);
@@ -134,6 +135,7 @@ void loop() {
   if (modo == MAPA) {
     if (m - tPaso >= MS_PASO) { tPaso = m; tickMapa(); }
     if (m - tReloj > 30000) { tReloj = m; titulo("RADAR CDSN"); panelTick(); }
-  } else if (modo == RESUMEN && m - tReloj > 30000) { tReloj = m; pantallaResumen(false); }   // hora al dia
-  else if (!carrusel && modo != APAGADA && millis() - tFicha > 60000) pantallaMapa();   // ficha, lista y paginas: vuelven solas al minuto
+  } else if (modo == ALERTA) tickAlerta(m);
+  else if (modo == RESUMEN && m - tReloj > 30000) { tReloj = m; pantallaResumen(false); }   // hora al dia
+  if (!carrusel && !alertaFija && modo != MAPA && modo != APAGADA && millis() - tFicha > 60000) pantallaMapa();   // ficha, lista y paginas: vuelven solas al minuto
 }
