@@ -13,14 +13,16 @@
 struct Fac { char n[24]; float inf; };
 
 // Color de cada aviso (la pantalla decide el color real)
+// (los conflictos en marcha ademas parpadean: campo "parpadea")
 enum Tono : uint8_t {
   TN_NADA,       // sin aviso
   TN_AVISO,      // naranja: actividad inusual, bajada, expansion pendiente
   TN_DISPUTA,    // amarillo (texto negro): conflicto empatado
-  TN_FAVOR,      // verde: defensa en curso (vamos ganando) o actividad a favor
-  TN_GRAVE,      // rojo fijo: posible ataque, retirada, ventaja baja, conflicto pendiente
-  TN_PERDIENDO   // rojo que parpadea: conflicto que vamos perdiendo
+  TN_FAVOR,      // verde: defensa en curso, a un dia de ganar, victoria segura, actividad a favor
+  TN_GRAVE,      // rojo: posible ataque, retirada, ventaja baja, dia decisivo, sistema en derrota
+  TN_PEND        // morado: guerra o elecciones pendientes (empiezan en el proximo tick)
 };
+enum Icono : uint8_t { IC_NADA, IC_ESPADAS, IC_SOBRE };   // guerra / elecciones
 
 struct Sis {
   char nom[34];
@@ -39,7 +41,13 @@ struct Sis {
   long t;                // hora del dato
   uint8_t nivel;         // 0 nada, 1 aviso, 2 grave (orden de las alertas)
   uint8_t tono;          // color del aviso (Tono)
-  bool espadas;          // conflicto activo: se pinta el icono de espadas
+  uint8_t icono;         // Icono: espadas (guerra) o sobre (elecciones)
+  bool parpadea;         // conflicto en marcha: el aviso parpadea
+  bool alarma;           // sale la pantalla grande de alerta (posible ataque, dia decisivo, sistema en derrota)
+  int8_t dia;            // dia del conflicto (1..7, 0 = no se sabe) y si es exacto (lo cuenta el escucha v10)
+  bool diaExacto;
+  char juego[44];        // que se juega hoy: "GANAR=victoria PERDER=empate"
+  char enJuego[28];      // lo que perdemos si perdemos el conflicto
   char alerta[20];       // titulo corto (MAYUSCULAS, sin tildes)
   char aviso[56];        // explicacion
   float ang;             // angulo en el radar (lo calcula la pantalla)
@@ -63,6 +71,7 @@ struct Datos {
   long t = 0;            // hora del archivo
   long tickGlobal = 0;   // ultimo tick de la galaxia (tick.edcd.io, via el escucha)
   int controlados = 0, alertas = 0, trafHoy = 0, ataques = 0, inusuales = 0, favor = 0;
+  int alarmas = 0;       // sistemas con pantalla grande de alerta (posible ataque, dia decisivo, sistema en derrota)
 };
 
 // Quita tildes y pasa a ASCII (las fuentes de la pantalla no tienen tildes)
@@ -188,35 +197,78 @@ static void preparaFiltro(JsonDocument &f) {
                         "tick_ult","tick_prox","tick_marg","tick_disp","tick_n","hinf"}) f[k] = true;
   f["pos"] = true;
   JsonObject c = f["conflictos"][0].to<JsonObject>();
-  for (const char *k : {"tipo","estado","contra","ganados","perdidos"}) c[k] = true;
+  for (const char *k : {"tipo","estado","contra","ganados","perdidos","dia","dia_exacto","fase","en_juego"}) c[k] = true;
   f["todas"][0]["n"] = true; f["todas"][0]["inf"] = true;
 }
 
+// ---------- fases de un conflicto (mismas reglas que el escucha v10 y la web) ----------
+// 7 dias como mucho; gana quien llegue a 4; si nadie llega, gana quien tenga mas. dia = el que se juega (1..7).
+#define DIAS_CONF 7
+static const char *faseConf(int g, int p, int dia) {
+  int quedan = DIAS_CONF + 1 - dia;                // dias que quedan, contando el de hoy
+  if (p + quedan < g) return "victoria";
+  if (g + quedan < p) return "sin_remedio";
+  if (p == 3 || (dia >= DIAS_CONF && abs(g - p) <= 1)) return "decisivo";
+  if (g == 3 && p <= 1) return "a_un_dia";
+  if (g > p) return "defensa";
+  if (g < p) return "derrota";
+  return g == 0 && dia <= 3 ? "disputado" : "igualado";
+}
+// como acabaria con g-p al terminar el dia "dia"
+static const char *finalConf(int g, int p, int dia) {
+  if (g >= 4) return "victoria";
+  if (p >= 4) return "derrota";
+  if (dia >= DIAS_CONF) return g > p ? "victoria" : p > g ? "derrota" : "empate";
+  return "sigue";
+}
+// que se juega hoy: "GANAR=victoria PERDER=empate" (+ "NULO=..." el dia 7); vacio si no cambia nada
+static void juegoConf(char *d, size_t n, int g, int p, int dia) {
+  const char *a = finalConf(g + 1, p, dia), *b = finalConf(g, p + 1, dia);
+  if (!strcmp(a, "sigue") && !strcmp(b, "sigue")) { d[0] = 0; return; }
+  if (dia >= DIAS_CONF) snprintf(d, n, "GANAR=%s PERDER=%s NULO=%s", a, b, finalConf(g, p, dia));
+  else snprintf(d, n, "GANAR=%s PERDER=%s", a, b);
+}
+
 static void calculaAlerta(Sis &s, JsonObjectConst o) {
-  s.nivel = 0; s.tono = TN_NADA; s.espadas = false; s.alerta[0] = 0; s.aviso[0] = 0;
+  s.nivel = 0; s.tono = TN_NADA; s.icono = IC_NADA; s.parpadea = false; s.alarma = false;
+  s.alerta[0] = 0; s.aviso[0] = 0; s.juego[0] = 0; s.enJuego[0] = 0; s.dia = 0;
   char tmp[40];
-  // 1) conflicto activo
+  // 1) conflicto (manda el marcador; las visitas ya no cuentan como posible ataque)
   for (JsonObjectConst c : o["conflictos"].as<JsonArrayConst>()) {
     const char *tipo = c["tipo"] | "", *est = c["estado"] | "";
     const char *t = !strcmp(tipo, "war") ? "GUERRA" : !strcmp(tipo, "civilwar") ? "GUERRA CIVIL" : "ELECCIONES";
+    const char *tt = !strcmp(tipo, "war") ? "Guerra" : !strcmp(tipo, "civilwar") ? "Guerra civil" : "Elecciones";
     ascii(tmp, c["contra"] | "?", sizeof tmp);
     int g = c["ganados"] | 0, p = c["perdidos"] | 0;
     s.ganados = g; s.perdidos = p;
-    if (!strcmp(est, "active")) {                  // marcador: vamos ganando, empate o perdiendo
-      const char *tt = !strcmp(tipo, "war") ? "Guerra" : !strcmp(tipo, "civilwar") ? "Guerra civil" : "Elecciones";
-      if (g > p) { strcpy(s.alerta, "DEFENSA EN CURSO"); s.tono = TN_FAVOR; }
-      else if (g == p) { strcpy(s.alerta, "DISPUTADO"); s.tono = TN_DISPUTA; }
-      else { strcpy(s.alerta, "PERDIENDO"); s.tono = TN_PERDIENDO; }
-      snprintf(s.aviso, sizeof s.aviso, "%s contra %s, dias %d-%d", tt, tmp, g, p);
+    s.icono = !strcmp(tipo, "election") ? IC_SOBRE : IC_ESPADAS;
+    ascii(s.enJuego, c["en_juego"] | "", sizeof s.enJuego);
+    if (!strcmp(est, "active")) {
+      // dia: lo cuenta el escucha v10; si no lo trae, el minimo posible (ganados + perdidos + 1)
+      s.diaExacto = c["dia_exacto"] | false;
+      s.dia = c["dia"] | 0;
+      if (s.dia <= 0) { s.dia = g + p + 1 < DIAS_CONF ? g + p + 1 : DIAS_CONF; s.diaExacto = false; }
+      const char *f = c["fase"] | "";
+      if (!f[0]) f = faseConf(g, p, s.dia);
+      juegoConf(s.juego, sizeof s.juego, g, p, s.dia);
+      struct { const char *f, *tit; uint8_t tono; bool parp, alarma; } F[] = {
+        {"victoria", "VICTORIA SEGURA", TN_FAVOR, false, false}, {"a_un_dia", "A UN DIA DE GANAR", TN_FAVOR, true, false},
+        {"defensa", "DEFENSA EN CURSO", TN_FAVOR, true, false},  {"disputado", "DISPUTADO", TN_DISPUTA, false, false},
+        {"igualado", "DISPUTADO", TN_DISPUTA, true, false},       {"decisivo", "DIA DECISIVO", TN_GRAVE, true, true},
+        {"derrota", "SISTEMA EN DERROTA", TN_GRAVE, true, true},  {"sin_remedio", "SISTEMA EN DERROTA", TN_GRAVE, true, true}};
+      int k = 0; while (k < 7 && strcmp(F[k].f, f)) k++;   // fase desconocida: la ultima (derrota)
+      strcpy(s.alerta, F[k].tit); s.tono = F[k].tono; s.parpadea = F[k].parp; s.alarma = F[k].alarma;
+      snprintf(s.aviso, sizeof s.aviso, "%s contra %s - dia %s%d/%d - %d-%d%s", tt, tmp, s.diaExacto ? "" : ">=", s.dia, DIAS_CONF, g, p,
+               !strcmp(f, "sin_remedio") ? " (sin remedio)" : "");
       snprintf(s.conf, sizeof s.conf, "%s contra %s", t, tmp);
-      s.confActivo = true; s.espadas = true; s.nivel = 2; return;
+      s.confActivo = true; s.nivel = 2; s.ataque = 0; return;
     }
     if (!strcmp(est, "pending")) {
       s.confPend = true;
       snprintf(s.conf, sizeof s.conf, "%s pendiente contra %s", t, tmp);
       snprintf(s.alerta, sizeof s.alerta, "%s PEND.", t);
-      snprintf(s.aviso, sizeof s.aviso, "contra %s", tmp);
-      s.nivel = 2; s.tono = TN_GRAVE; return;
+      snprintf(s.aviso, sizeof s.aviso, "contra %s - empieza en el proximo tick", tmp);
+      s.nivel = 2; s.tono = TN_PEND; s.ataque = 0; return;
     }
   }
   JsonArrayConst act = o["activos"], pen = o["pendientes"];
@@ -232,7 +284,7 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
     snprintf(s.aviso, sizeof s.aviso, "solo %.1f puntos sobre %s", s.inf - seg, tmp); s.nivel = 2; s.tono = TN_GRAVE; return;
   }
   // 4) posible ataque: pico de visitas y baja la influencia
-  if (s.ataque == 2) { strcpy(s.alerta, "POSIBLE ATAQUE"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 2; s.tono = TN_GRAVE; return; }
+  if (s.ataque == 2) { strcpy(s.alerta, "POSIBLE ATAQUE"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 2; s.tono = TN_GRAVE; s.alarma = true; return; }
   // 5) bajada fuerte desde ayer
   if (!isnan(s.prev) && s.prev - s.inf >= 3.0f) {
     strcpy(s.alerta, "BAJADA");
@@ -298,7 +350,7 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
   if (!L.busca("\"sistemas\"") || L.salta() != ':' || L.salta() != '{') { snprintf(err, errmax, "JSON: sin sistemas"); return false; }
   JsonDocument filtro; preparaFiltro(filtro);
   JsonDocument doc;                                  // un solo sistema cada vez
-  int n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, fav = 0, sin = 0;
+  int n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, fav = 0, sin = 0, ala = 0;
   char clave[48];
   while (true) {
     int c = L.salta();
@@ -316,14 +368,14 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
     if (n >= d.cap) { sin++; continue; }                        // no cabe: se cuenta para avisar
     Sis &s = d.s[n];
     llenaSistema(s, o, clave, hoy);
-    ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy; at += s.ataque == 2; inu += s.ataque == 1; fav += s.ataque == 3;
+    ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy; at += s.ataque == 2; inu += s.ataque == 1; fav += s.ataque == 3; ala += s.alarma;
     n++;
   }
   // despues de "sistemas" vienen la hora del archivo y el tick global
   long t = 0, tg = 0;
   if (L.busca("\"t\"") && L.salta() == ':') t = (long)L.numero();
   if (L.busca("\"tick_global\"") && L.salta() == ':') tg = (long)L.numero();
-  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.favor = fav; d.sinSitio = sin;
+  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.favor = fav; d.alarmas = ala; d.sinSitio = sin;
   d.t = t; d.tickGlobal = tg;
   return true;
 }

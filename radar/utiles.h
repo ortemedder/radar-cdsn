@@ -46,17 +46,19 @@ uint16_t colorNivel(uint8_t nv) { return nv == 2 ? ROJO : AMAR; }
 
 // ---------- colores de los avisos (ver Tono en datos.h) ----------
 bool parpOn() { return (millis() / 500) % 2 == 0; }              // fase del parpadeo (medio segundo)
-uint16_t colorTono(uint8_t t, bool on = true) {                  // color del borde / texto
+uint16_t colorTono(uint8_t t, bool on = true) {                  // color del borde / texto (on = false: apagado del parpadeo)
+  uint16_t c;
   switch (t) {
-    case TN_AVISO: return NAR_AV;
-    case TN_DISPUTA: return AMAR_AV;
-    case TN_FAVOR: return VERDE;
-    case TN_GRAVE: return ROJO;
-    case TN_PERDIENDO: return on ? ROJO : ROJO_OSC;
-    default: return BLANCO;
+    case TN_AVISO: c = NAR_AV; break;
+    case TN_DISPUTA: c = AMAR_AV; break;
+    case TN_FAVOR: c = VERDE; break;
+    case TN_GRAVE: c = ROJO; break;
+    case TN_PEND: c = MORADO; break;
+    default: c = BLANCO;
   }
+  return on ? c : mezcla(c, TFT_BLACK, 0.65f);
 }
-uint16_t textoTono(uint8_t t) { return t == TN_DISPUTA || t == TN_FAVOR ? TFT_BLACK : BLANCO; }   // texto sobre la banda
+uint16_t textoTono(uint8_t t) { return t == TN_DISPUTA || t == TN_FAVOR ? TFT_BLACK : BLANCO; }   // texto sobre la banda (negro en amarillo y verde)
 uint16_t colorSis(const Sis &s) { return s.nivel ? colorTono(s.tono) : BLANCO; }
 
 // Icono de dos espadas cruzadas (14 x 14) en x,y (esquina de arriba a la izquierda)
@@ -70,13 +72,20 @@ void espadas(int x, int y, uint16_t c) {
   tft.fillRect(x, y + 12, 2, 2, c); tft.fillRect(x + 12, y + 12, 2, 2, c);   // pomos
 }
 
-// Banda de titulo de un aviso: fondo del color del tono y texto encima (con espadas si hay conflicto).
-// La de PERDIENDO se vuelve a pintar cada medio segundo para que parpadee.
+// Sobre (elecciones), 14 x 14
+void sobre(int x, int y, uint16_t c) {
+  tft.drawRect(x, y + 2, 14, 10, c); tft.drawRect(x + 1, y + 3, 12, 8, c);
+  tft.drawLine(x + 1, y + 3, x + 7, y + 8, c); tft.drawLine(x + 13, y + 3, x + 7, y + 8, c);
+}
+
+// Banda de titulo de un aviso: fondo del color del tono y texto encima (espadas = guerra, sobre = elecciones).
+// Las de conflictos en marcha se vuelven a pintar cada medio segundo para que parpadeen.
 void bandaAviso(int x, int y, int w, int h, const Sis &s, int fuente, bool on = true) {
-  uint16_t fondo = colorTono(s.tono, on), txt = textoTono(s.tono);
+  on = on || !s.parpadea;
+  uint16_t fondo = colorTono(s.tono, on), txt = on ? textoTono(s.tono) : mezcla(textoTono(s.tono), fondo, 0.4f);
   tft.fillRoundRect(x, y, w, h, 3, fondo);
   int tx = x + 4;
-  if (s.espadas) { espadas(tx, y + (h - 14) / 2, txt); tx += 18; }
+  if (s.icono) { (s.icono == IC_SOBRE ? sobre : espadas)(tx, y + (h - 14) / 2, txt); tx += 18; }
   char u[64]; corta(u, s.alerta, x + w - tx - 4, fuente);
   tft.setTextColor(txt); tft.setTextDatum(ML_DATUM); tft.drawString(u, tx, y + h / 2 + 1, fuente);
   tft.setTextDatum(TL_DATUM);

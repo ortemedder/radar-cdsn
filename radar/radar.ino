@@ -51,6 +51,7 @@ void colores() {
   ROJO = tft.color565(255, 70, 50);   ROSA = tft.color565(255, 110, 200);   BLANCO = TFT_WHITE;
   ILUM = tft.color565(255, 235, 180);
   NAR_AV = tft.color565(255, 100, 0); ROJO_OSC = tft.color565(90, 18, 12); AMAR_AV = tft.color565(255, 235, 0);
+  MORADO = tft.color565(175, 95, 255);
   for (int i = 0; i < N_ESTELA; i++) {
     float t = (float)i / N_ESTELA;
     estela[i] = i == 0 ? tft.color565(255, 200, 90) : mezcla(tft.color565(200, 110, 0), FONDO, t * t * 0.4f + t * 0.6f);
@@ -71,13 +72,14 @@ void presentacion() {
 // Pantalla de prueba: los 5 colores de aviso tal y como salen en el panel. Un toque la quita.
 void pruebaColores() {
 #if PRUEBA_COLORES
-  struct { uint8_t tono; bool esp; const char *tit, *exp; } m[] = {
-    {TN_PERDIENDO, true,  "PERDIENDO",        "conflicto, el rival va ganando (parpadea)"},
-    {TN_GRAVE,     false, "POSIBLE ATAQUE",   "pico de visitas y baja la influencia"},
-    {TN_DISPUTA,   true,  "DISPUTADO",        "conflicto empatado"},
-    {TN_AVISO,     false, "ACTIVIDAD INUSUAL","pico de visitas, sin cambio claro"},
-    {TN_FAVOR,     true,  "DEFENSA EN CURSO", "conflicto, vamos ganando"},
-    {TN_FAVOR,     false, "ACTIVIDAD A FAVOR","pico de visitas y sube (propia o ayuda)"},
+  struct { uint8_t tono, icono; bool parp; const char *tit, *exp; } m[] = {
+    {TN_GRAVE,   IC_ESPADAS, true,  "SISTEMA EN DERROTA", "vamos perdiendo / dia decisivo"},
+    {TN_GRAVE,   IC_NADA,    false, "POSIBLE ATAQUE",     "visitas y baja la influencia"},
+    {TN_PEND,    IC_SOBRE,   false, "ELECCIONES PEND.",   "empieza en el proximo tick"},
+    {TN_DISPUTA, IC_ESPADAS, true,  "DISPUTADO",          "empate (fijo si 0-0 dias 1-3)"},
+    {TN_AVISO,   IC_NADA,    false, "ACTIVIDAD INUSUAL",  "visitas, sin cambio claro"},
+    {TN_FAVOR,   IC_SOBRE,   true,  "DEFENSA EN CURSO",   "vamos ganando (fijo: victoria)"},
+    {TN_FAVOR,   IC_NADA,    false, "ACTIVIDAD A FAVOR",  "visitas y sube (propia o ayuda)"},
   };
   const int N = sizeof m / sizeof m[0];
   Sis s; memset(&s, 0, sizeof s);
@@ -85,10 +87,11 @@ void pruebaColores() {
   titulo("PRUEBA DE COLORES", "toca para seguir");
   auto pinta = [&](bool on) {
     for (int k = 0; k < N; k++) {
-      int y = 36 + k * 46;
-      s.tono = m[k].tono; s.espadas = m[k].esp; strncpy(s.alerta, m[k].tit, sizeof s.alerta - 1);
-      if (on || s.tono == TN_PERDIENDO) bandaAviso(8, y, 210, 22, s, 2, on);
-      tft.drawCircle(244, y + 11, 10, colorTono(s.tono, on)); tft.drawCircle(244, y + 11, 11, colorTono(s.tono, on));   // aro del mapa
+      int y = 34 + k * 40;
+      s.tono = m[k].tono; s.icono = m[k].icono; s.parpadea = m[k].parp; strncpy(s.alerta, m[k].tit, sizeof s.alerta - 1);
+      if (on || s.parpadea) bandaAviso(8, y, 210, 22, s, 2, on);
+      uint16_t ca = colorTono(s.tono, on || !s.parpadea);
+      tft.drawCircle(244, y + 11, 10, ca); tft.drawCircle(244, y + 11, 11, ca);   // aro del mapa
       if (!on) continue;
       tft.setTextColor(colorTono(s.tono)); tft.setTextDatum(TL_DATUM); tft.drawString(m[k].tit, 266, y + 1, 1);   // texto de las listas
       tft.setTextColor(NAR_MED); tft.drawString(m[k].exp, 266, y + 13, 1);

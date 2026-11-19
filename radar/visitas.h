@@ -109,7 +109,7 @@ void pantallaResumen(bool mover) {
     tft.drawString(u, ANCHO / 2 + ox, 176 + oy, 2);
   } else { tft.setTextColor(NAR_MED); tft.drawString("PROX. TICK: aprendiendo...", ANCHO / 2 + ox, 152 + oy, 4); }
   // cifras
-  int graves = 0; for (int i = 0; i < datos.n; i++) graves += datos.s[i].tono == TN_GRAVE || datos.s[i].tono == TN_PERDIENDO;
+  int graves = 0; for (int i = 0; i < datos.n; i++) graves += datos.s[i].tono == TN_GRAVE;
   snprintf(t, sizeof t, "%d de %d", datos.controlados, datos.n);
   cajaResumen(14 + ox, 196 + oy, "CONTROLADOS", t, BLANCO);
   snprintf(t, sizeof t, "%d", datos.alertas);
@@ -134,7 +134,7 @@ void pantallaResumen(bool mover) {
   }
 }
 
-// ---------- ALERTA: pantalla completa de POSIBLE ATAQUE ----------
+// ---------- ALERTA: pantalla completa de POSIBLE ATAQUE, DIA DECISIVO o SISTEMA EN DERROTA ----------
 void marcoAlerta(bool fuerte) {                    // marco rojo que late
   uint16_t c = fuerte ? ROJO : tft.color565(110, 20, 15);
   for (int k = 0; k < 4; k++) tft.drawRect(k, k, ANCHO - 2 * k, ALTO - 2 * k, c);
@@ -142,7 +142,7 @@ void marcoAlerta(bool fuerte) {                    // marco rojo que late
 
 void pantallaAlerta() {
   int i = buscaHash(alertaHash);
-  if (i < 0 || datos.s[i].ataque != 2) i = sigAtaque(alertaHash);  // ya no esta: el siguiente que haya
+  if (i < 0 || !datos.s[i].alarma) i = sigAtaque(alertaHash);      // ya no esta: el siguiente que haya
   if (i < 0) { alertaFija = false; pantallaMapa(); return; }        // no queda ninguno
   alertaHash = hashNombre(datos.s[i].nom);
   modo = ALERTA; tFicha = millis();
@@ -152,7 +152,8 @@ void pantallaAlerta() {
   marcoAlerta(true);
   uint16_t ROJO_OSC = tft.color565(150, 25, 20);
   tft.fillRect(10, 10, ANCHO - 20, 36, ROJO_OSC);
-  tft.setTextDatum(MC_DATUM); tft.setTextColor(BLANCO); tft.drawString("POSIBLE ATAQUE", ANCHO / 2, 29, 4);
+  tft.setTextDatum(MC_DATUM); tft.setTextColor(BLANCO); tft.drawString(s.alerta, ANCHO / 2, 29, 4);
+  if (s.icono) { int w = tft.textWidth(s.alerta, 4); (s.icono == IC_SOBRE ? sobre : espadas)(ANCHO / 2 - w / 2 - 24, 21, BLANCO); }
   // sistema
   char n[40]; strncpy(n, s.nom, sizeof n - 1); n[sizeof n - 1] = 0;
   for (char *p = n; *p; p++) *p = toupper(*p);
@@ -164,6 +165,14 @@ void pantallaAlerta() {
   else snprintf(t, sizeof t, "no controlado - manda %s", s.nf ? s.f[0].n : "?");
   tft.setTextColor(s.ctrl ? VERDE : NAR_MED); corta(u, t, 456, 2); tft.drawString(u, ANCHO / 2, 94, 2);
   // datos
+  if (s.confActivo) {                              // conflicto: marcador, dia, que se juega y que hay en juego
+    tft.setTextDatum(TL_DATUM); tft.setTextColor(BLANCO); corta(u, s.aviso, 432, 2); tft.drawString(u, 24, 120, 2);
+    int x = 24;
+    for (int k = 0; k < s.ganados; k++, x += 15) tft.fillRect(x, 148, 12, 12, VERDE);
+    for (int k = 0; k < s.perdidos; k++, x += 15) tft.fillRect(x, 148, 12, 12, ROJO);
+    if (s.juego[0]) { tft.setTextColor(AMAR_AV); corta(u, s.juego, 440 - (x - 24), 2); tft.drawString(u, x + 8, 146, 2); }
+    if (s.enJuego[0]) { snprintf(t, sizeof t, "EN JUEGO: %s", s.enJuego); tft.setTextColor(NAR); corta(u, t, 432, 2); tft.drawString(u, 24, 172, 2); }
+  } else {
   int v = s.traf[s.picoAyer ? 1 : 0];
   coma(h, sizeof h, s.media7);
   snprintf(t, sizeof t, "PILOTOS  %d %s  (media %s)  x%.1f", v, s.picoAyer ? "ayer" : "hoy", h, v / (s.media7 > 1 ? s.media7 : 1.0f));
@@ -172,26 +181,27 @@ void pantallaAlerta() {
   coma(h, sizeof h, s.inf); coma(d, sizeof d, s.inf - s.prev, "%+.1f");
   snprintf(t, sizeof t, "INFLUENCIA  %s %%  (%s desde ayer)", h, d);
   tft.setTextColor(ROJO); tft.drawString(t, 24, 146, 2);
+  }
   long p = proxTick(s); bool global = false;
   if (!p) { int mejor; calculaTick(p, mejor, global); global = true; }
   if (p) {
     horaLocal(h, sizeof h, p); duracion(d, sizeof d, max(0L, p - ahora()));
     snprintf(t, sizeof t, "PROX. TICK  ~%s  en %s%s", h, d, global ? " (galaxia)" : "");
   } else snprintf(t, sizeof t, "PROX. TICK  aprendiendo...");
-  tft.setTextColor(ROSA); tft.drawString(t, 24, 172, 2);
+  tft.setTextColor(ROSA); tft.drawString(t, 24, s.confActivo && s.enJuego[0] ? 198 : 172, 2);
   // si no es nuestro: quien manda
-  if (s.nf > 1 && !s.ctrl) {
+  if (s.nf > 1 && !s.ctrl && !s.confActivo) {
     coma(h, sizeof h, s.f[0].inf); snprintf(t, sizeof t, "%s: %s %%", s.f[0].n, h);
     tft.setTextColor(NAR_MED); corta(u, t, 440, 2); tft.drawString(u, 24, 198, 2);
   }
   haceTexto(h, sizeof h, s.t);
-  snprintf(t, sizeof t, "dato %s  -  %d de %d posibles ataques", h,
-           [&] { int k = 0; for (int j = 0; j <= i; j++) k += datos.s[j].ataque == 2; return k; }(), datos.ataques);
+  snprintf(t, sizeof t, "dato %s  -  alerta %d de %d", h,
+           [&] { int k = 0; for (int j = 0; j <= i; j++) k += datos.s[j].alarma; return k; }(), datos.alarmas);
   tft.setTextColor(NAR_MED); tft.drawString(t, 24, 226, 2);
   if (!alertaFija) { tft.setTextColor(NAR_OSC); tft.drawString("toca para volver al mapa", 24, 246, 1); }
   // botones
   dibujaBotones(ALERTA);
-  if (datos.ataques > 1) boton(ALE_B2, ALE_BY, ALE_BW, ALE_BH, "SIGUIENTE", NAR, 2);
+  if (datos.alarmas > 1) boton(ALE_B2, ALE_BY, ALE_BW, ALE_BH, "SIGUIENTE", NAR, 2);
   tft.fillRoundRect(ALE_B3, ALE_BY, ALE_BW, ALE_BH, 5, ROJO_OSC);
   tft.setTextColor(BLANCO); tft.setTextDatum(MC_DATUM); tft.drawString("VISTO", ALE_B3 + ALE_BW / 2, ALE_BY + ALE_BH / 2 + 1, 2);
 }
@@ -202,11 +212,12 @@ void tickAlerta(uint32_t m) {                      // latido del marco
   t = m; fuerte = !fuerte; marcoAlerta(fuerte);
 }
 
-// Tras cada descarga: si hay un posible ataque que no estaba antes, sale la alerta (enciende la pantalla si estaba en negro)
+// Tras cada descarga: si hay una alarma que no estaba antes (o ha cambiado, p. ej. de DERROTA a DIA DECISIVO),
+// sale la alerta (enciende la pantalla si estaba en negro)
 void revisaAtaques() {
   uint32_t ahoraH[MAX_SIS]; int na = 0, nuevo = -1;
-  for (int i = 0; i < datos.n; i++) if (datos.s[i].ataque == 2) {
-    uint32_t h = hashNombre(datos.s[i].nom); ahoraH[na++] = h;
+  for (int i = 0; i < datos.n; i++) if (datos.s[i].alarma) {
+    uint32_t h = hashNombre(datos.s[i].nom) ^ (hashNombre(datos.s[i].alerta) * 31u); ahoraH[na++] = h;
     if (nuevo < 0 && !estaEn(h, ataqAntes, nAtaqAntes)) nuevo = i;
   }
   memcpy(ataqAntes, ahoraH, na * sizeof(uint32_t)); nAtaqAntes = na;
@@ -218,7 +229,7 @@ void revisaAtaques() {
 }
 
 // ---------- salvapantallas: carrusel mapa / alerta / visitas / resumen ----------
-// La pantalla de alerta solo entra en el bucle mientras haya algun posible ataque.
+// La pantalla de alerta solo entra en el bucle mientras haya alguna alarma.
 void tickCarrusel(uint32_t m) {
   if (alertaFija) return;
   if (!carrusel) {
@@ -227,7 +238,7 @@ void tickCarrusel(uint32_t m) {
     if (modo != MAPA) pantallaMapa();
     return;
   }
-  uint32_t ale = datos.ataques ? CAR_ALE_S : 0;
+  uint32_t ale = datos.alarmas ? CAR_ALE_S : 0;
   uint32_t f = ((m - tCarrusel) / 1000) % (CAR_MAPA_S + ale + CAR_VIS_S + CAR_RES_S);
   Modo q = f < CAR_MAPA_S ? MAPA : f < CAR_MAPA_S + ale ? ALERTA : f < CAR_MAPA_S + ale + CAR_VIS_S ? VISITAS : RESUMEN;
   if (q == modo) return;
