@@ -46,8 +46,6 @@ struct Sis {
   bool alarma;           // sale la pantalla grande de alerta (posible ataque, dia decisivo, sistema en derrota)
   int8_t dia;            // dia del conflicto (1..7, 0 = no se sabe) y si es exacto (lo cuenta el escucha v10)
   bool diaExacto;
-  char juego[44];        // que se juega hoy: "GANAR=victoria PERDER=empate"
-  char enJuego[28];      // lo que perdemos si perdemos el conflicto
   char alerta[20];       // titulo corto (MAYUSCULAS, sin tildes)
   char aviso[56];        // explicacion
   float ang;             // angulo en el radar (lo calcula la pantalla)
@@ -197,7 +195,7 @@ static void preparaFiltro(JsonDocument &f) {
                         "tick_ult","tick_prox","tick_marg","tick_disp","tick_n","hinf"}) f[k] = true;
   f["pos"] = true;
   JsonObject c = f["conflictos"][0].to<JsonObject>();
-  for (const char *k : {"tipo","estado","contra","ganados","perdidos","dia","dia_exacto","fase","en_juego"}) c[k] = true;
+  for (const char *k : {"tipo","estado","contra","ganados","perdidos","dia","dia_exacto","fase"}) c[k] = true;
   f["todas"][0]["n"] = true; f["todas"][0]["inf"] = true;
 }
 
@@ -231,7 +229,7 @@ static void juegoConf(char *d, size_t n, int g, int p, int dia) {
 
 static void calculaAlerta(Sis &s, JsonObjectConst o) {
   s.nivel = 0; s.tono = TN_NADA; s.icono = IC_NADA; s.parpadea = false; s.alarma = false;
-  s.alerta[0] = 0; s.aviso[0] = 0; s.juego[0] = 0; s.enJuego[0] = 0; s.dia = 0;
+  s.alerta[0] = 0; s.aviso[0] = 0; s.dia = 0;
   char tmp[40];
   // 1) conflicto (manda el marcador; las visitas ya no cuentan como posible ataque)
   for (JsonObjectConst c : o["conflictos"].as<JsonArrayConst>()) {
@@ -242,7 +240,6 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
     int g = c["ganados"] | 0, p = c["perdidos"] | 0;
     s.ganados = g; s.perdidos = p;
     s.icono = !strcmp(tipo, "election") ? IC_SOBRE : IC_ESPADAS;
-    ascii(s.enJuego, c["en_juego"] | "", sizeof s.enJuego);
     if (!strcmp(est, "active")) {
       // dia: lo cuenta el escucha v10; si no lo trae, el minimo posible (ganados + perdidos + 1)
       s.diaExacto = c["dia_exacto"] | false;
@@ -250,7 +247,6 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
       if (s.dia <= 0) { s.dia = g + p + 1 < DIAS_CONF ? g + p + 1 : DIAS_CONF; s.diaExacto = false; }
       const char *f = c["fase"] | "";
       if (!f[0]) f = faseConf(g, p, s.dia);
-      juegoConf(s.juego, sizeof s.juego, g, p, s.dia);
       struct { const char *f, *tit; uint8_t tono; bool parp, alarma; } F[] = {
         {"victoria", "VICTORIA SEGURA", TN_FAVOR, false, false}, {"a_un_dia", "A UN DIA DE GANAR", TN_FAVOR, true, false},
         {"defensa", "DEFENSA EN CURSO", TN_FAVOR, true, false},  {"disputado", "DISPUTADO", TN_DISPUTA, false, false},

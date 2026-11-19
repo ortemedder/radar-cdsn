@@ -27,8 +27,12 @@ bool descarga() {
   WiFiClientSecure cli; cli.setInsecure();
   HTTPClient http; http.useHTTP10(true); http.setTimeout(20000);
   if (!http.begin(cli, URL)) { strcpy(ultimoError, "URL"); apagaWifi(); return false; }
+  Serial.printf("WiFi OK, RAM libre para conectar: %u (bloque mayor %u)\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   int cod = http.GET();
-  if (cod != 200) { snprintf(ultimoError, sizeof ultimoError, "HTTP %d", cod); http.end(); apagaWifi(); return false; }
+  if (cod != 200) {
+    char e[64] = ""; cli.lastError(e, sizeof e);
+    Serial.printf("HTTP %d (%s) TLS: %s, RAM libre %u (bloque mayor %u)\n", cod, http.errorToString(cod).c_str(), e, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    snprintf(ultimoError, sizeof ultimoError, "HTTP %d", cod); http.end(); apagaWifi(); return false; }
   char hoy[11]; hoyUTC(hoy);
   WiFiClient &flujo = http.getStream();
   flujo.setTimeout(10000);                         // 10 s sin datos = corte

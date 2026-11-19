@@ -170,8 +170,8 @@ void pantallaAlerta() {
     int x = 24;
     for (int k = 0; k < s.ganados; k++, x += 15) tft.fillRect(x, 148, 12, 12, VERDE);
     for (int k = 0; k < s.perdidos; k++, x += 15) tft.fillRect(x, 148, 12, 12, ROJO);
-    if (s.juego[0]) { tft.setTextColor(AMAR_AV); corta(u, s.juego, 440 - (x - 24), 2); tft.drawString(u, x + 8, 146, 2); }
-    if (s.enJuego[0]) { snprintf(t, sizeof t, "EN JUEGO: %s", s.enJuego); tft.setTextColor(NAR); corta(u, t, 432, 2); tft.drawString(u, 24, 172, 2); }
+    char jg[48]; juegoConf(jg, sizeof jg, s.ganados, s.perdidos, s.dia);   // se calcula aqui (no se guarda: ahorra RAM)
+    if (jg[0]) { tft.setTextColor(AMAR_AV); corta(u, jg, 440 - (x - 24), 2); tft.drawString(u, x + 8, 146, 2); }
   } else {
   int v = s.traf[s.picoAyer ? 1 : 0];
   coma(h, sizeof h, s.media7);
@@ -188,7 +188,7 @@ void pantallaAlerta() {
     horaLocal(h, sizeof h, p); duracion(d, sizeof d, max(0L, p - ahora()));
     snprintf(t, sizeof t, "PROX. TICK  ~%s  en %s%s", h, d, global ? " (galaxia)" : "");
   } else snprintf(t, sizeof t, "PROX. TICK  aprendiendo...");
-  tft.setTextColor(ROSA); tft.drawString(t, 24, s.confActivo && s.enJuego[0] ? 198 : 172, 2);
+  tft.setTextColor(ROSA); tft.drawString(t, 24, 172, 2);
   // si no es nuestro: quien manda
   if (s.nf > 1 && !s.ctrl && !s.confActivo) {
     coma(h, sizeof h, s.f[0].inf); snprintf(t, sizeof t, "%s: %s %%", s.f[0].n, h);
