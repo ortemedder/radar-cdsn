@@ -6,7 +6,7 @@
 #include <TFT_eSPI.h>
 #include "datos.h"
 
-#define VERSION "v2.5"      // subir el numero en cada cambio
+#define VERSION "v2.6"      // subir el numero en cada cambio
 #if CONFIG_IDF_TARGET_ESP32S3
 #error "Este radar es para el ESP32 normal: Herramientas -> Placa -> ESP32 Dev Module"
 #endif
@@ -63,6 +63,12 @@ const uint32_t CARRUSEL_ESPERA = 5UL * 60 * 1000;
 const uint32_t CAR_MAPA_S = 120, CAR_VIS_S = 60, CAR_RES_S = 60;   // segundos de cada pantalla
 const uint32_t CAR_ALE_S = 30;                     // alerta de posible ataque (solo mientras haya alguno)
 
+// pantalla de prueba de colores al arrancar (0 = no sale)
+#ifndef PRUEBA_COLORES
+#define PRUEBA_COLORES 1
+#endif
+const uint32_t PRUEBA_MS = 8000;                   // cuanto dura (un toque la quita antes)
+
 // barrido
 const int N_ESTELA = 14, PASO = 4;                 // grados por paso; 90 pasos = 1 vuelta
 const uint32_t MS_PASO = 4000 / (360 / PASO);      // una vuelta cada 4 s
@@ -72,6 +78,7 @@ TFT_eSPI tft;
 Datos *pDatos = nullptr;                           // se reserva en setup() (memoria dinamica)
 #define datos (*pDatos)
 uint16_t ROSA, NAR, NAR_OSC, NAR_MED, FONDO, REJILLA, VERDE, AMAR, AZUL, ROJO, BLANCO, ILUM, LINEA;
+uint16_t NAR_AV, ROJO_OSC, AMAR_AV;                 // naranja de aviso, rojo apagado del parpadeo, amarillo del disputado
 uint16_t estela[N_ESTELA];
 float SENO[360], COSENO[360];                      // tablas: se calculan una vez
 
@@ -102,3 +109,4 @@ void pantallaMapa(); void pantallaFicha(int i); void pantallaLista(); void panel
 void pantallaVisitas(); void pantallaResumen(bool mover); void pantallaAlerta(); void revisaAtaques();
 void titulo(const char *izq, const char *extra = nullptr);
 void ordenaAlertas(); void iconoWifi(int e);
+bool parpOn(); void bandaFicha(const Sis &s, bool on);

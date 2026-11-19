@@ -50,6 +50,7 @@ void colores() {
   VERDE = tft.color565(90, 220, 120); AMAR = tft.color565(255, 210, 40);    AZUL = tft.color565(90, 170, 255);
   ROJO = tft.color565(255, 70, 50);   ROSA = tft.color565(255, 110, 200);   BLANCO = TFT_WHITE;
   ILUM = tft.color565(255, 235, 180);
+  NAR_AV = tft.color565(255, 100, 0); ROJO_OSC = tft.color565(90, 18, 12); AMAR_AV = tft.color565(255, 235, 0);
   for (int i = 0; i < N_ESTELA; i++) {
     float t = (float)i / N_ESTELA;
     estela[i] = i == 0 ? tft.color565(255, 200, 90) : mezcla(tft.color565(200, 110, 0), FONDO, t * t * 0.4f + t * 0.6f);
@@ -65,6 +66,42 @@ void presentacion() {
   tft.setTextColor(NAR_MED); tft.drawString("Caballeros de Sion  -  RADAR CDSN", ANCHO / 2, 212, 2);
   tft.setTextColor(NAR_OSC); tft.drawString(VERSION, ANCHO / 2, 300, 2);
   delay(3000);
+}
+
+// Pantalla de prueba: los 5 colores de aviso tal y como salen en el panel. Un toque la quita.
+void pruebaColores() {
+#if PRUEBA_COLORES
+  struct { uint8_t tono; bool esp; const char *tit, *exp; } m[] = {
+    {TN_PERDIENDO, true,  "PERDIENDO",        "conflicto, el rival va ganando (parpadea)"},
+    {TN_GRAVE,     false, "POSIBLE ATAQUE",   "pico de visitas y baja la influencia"},
+    {TN_DISPUTA,   true,  "DISPUTADO",        "conflicto empatado"},
+    {TN_AVISO,     false, "ACTIVIDAD INUSUAL","pico de visitas, sin cambio claro"},
+    {TN_FAVOR,     true,  "DEFENSA EN CURSO", "conflicto, vamos ganando"},
+    {TN_FAVOR,     false, "ACTIVIDAD A FAVOR","pico de visitas y sube (propia o ayuda)"},
+  };
+  const int N = sizeof m / sizeof m[0];
+  Sis s; memset(&s, 0, sizeof s);
+  tft.fillScreen(TFT_BLACK);
+  titulo("PRUEBA DE COLORES", "toca para seguir");
+  auto pinta = [&](bool on) {
+    for (int k = 0; k < N; k++) {
+      int y = 36 + k * 46;
+      s.tono = m[k].tono; s.espadas = m[k].esp; strncpy(s.alerta, m[k].tit, sizeof s.alerta - 1);
+      if (on || s.tono == TN_PERDIENDO) bandaAviso(8, y, 210, 22, s, 2, on);
+      tft.drawCircle(244, y + 11, 10, colorTono(s.tono, on)); tft.drawCircle(244, y + 11, 11, colorTono(s.tono, on));   // aro del mapa
+      if (!on) continue;
+      tft.setTextColor(colorTono(s.tono)); tft.setTextDatum(TL_DATUM); tft.drawString(m[k].tit, 266, y + 1, 1);   // texto de las listas
+      tft.setTextColor(NAR_MED); tft.drawString(m[k].exp, 266, y + 13, 1);
+    }
+  };
+  pinta(true);
+  uint32_t t0 = millis(); bool on = true; uint16_t x, y;
+  while (millis() - t0 < PRUEBA_MS) {
+    if (tft.getTouch(&x, &y)) { while (tft.getTouch(&x, &y)) delay(20); break; }
+    bool f = parpOn(); if (f != on) { on = f; pinta(on); }
+    delay(20);
+  }
+#endif
 }
 
 void setup() {
@@ -91,6 +128,7 @@ void setup() {
   preparaTablas();
   preparaSprite();
   presentacion();
+  pruebaColores();
   tft.fillScreen(TFT_BLACK);
   titulo("RADAR CDSN", "conectando WiFi...");
   tft.setTextColor(NAR_MED); tft.setTextDatum(MC_DATUM);
@@ -135,7 +173,9 @@ void loop() {
   if (modo == MAPA) {
     if (m - tPaso >= MS_PASO) { tPaso = m; tickMapa(); }
     if (m - tReloj > 30000) { tReloj = m; titulo("RADAR CDSN"); panelTick(); }
+    tickParpadeo();
   } else if (modo == ALERTA) tickAlerta(m);
+  else if (modo == FICHA) tickParpadeo();
   else if (modo == RESUMEN && m - tReloj > 30000) { tReloj = m; pantallaResumen(false); }   // hora al dia
   if (!carrusel && !alertaFija && modo != MAPA && modo != APAGADA && millis() - tFicha > 60000) pantallaMapa();   // ficha, lista y paginas: vuelven solas al minuto
 }
