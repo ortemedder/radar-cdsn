@@ -78,7 +78,7 @@ TFT_eSPI tft;
 Datos *pDatos = nullptr;                           // se reserva en setup() (memoria dinamica)
 #define datos (*pDatos)
 uint16_t ROSA, NAR, NAR_OSC, NAR_MED, FONDO, REJILLA, VERDE, AMAR, AZUL, ROJO, BLANCO, ILUM, LINEA;
-uint16_t NAR_AV, ROJO_OSC, AMAR_AV;                 // naranja de aviso, rojo apagado del parpadeo, amarillo del disputado
+uint16_t NAR_AV, ROJO_OSC, AMAR_AV, MORADO;         // naranja de aviso, rojo apagado, amarillo del disputado, morado del pendiente
 uint16_t estela[N_ESTELA];
 float SENO[360], COSENO[360];                      // tablas: se calculan una vez
 

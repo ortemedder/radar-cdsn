@@ -108,7 +108,7 @@ void bandaPanel(int k, const Sis &s, bool on) {
   bandaAviso(PX + 2, y + 2, s.nueva ? ANCHO - 60 - (PX + 2) : PW - 4, 17, s, 2, on);
 }
 
-// Parpadeo de los avisos PERDIENDO (cajas del panel y ficha): se repinta solo la banda cada medio segundo
+// Parpadeo de los conflictos en marcha (cajas del panel y ficha): se repinta solo la banda cada medio segundo
 void tickParpadeo() {
   static bool antes = true;
   bool on = parpOn(); if (on == antes) return;
@@ -117,13 +117,13 @@ void tickParpadeo() {
     for (int k = 0; k < AL_N; k++) {
       int i = orden[pagAlerta * AL_N + k]; if (i < 0) break;
       const Sis &s = datos.s[i];
-      if (s.tono != TN_PERDIENDO) continue;
+      if (!s.parpadea) continue;
       tft.drawRoundRect(PX, AL_Y + k * AL_PASO, PW, AL_H, 5, colorTono(s.tono, on));
       bandaPanel(k, s, on);
     }
   } else if (modo == FICHA && fichaSis >= 0 && fichaSis < datos.n) {
     const Sis &s = datos.s[fichaSis];
-    if (s.nivel && s.tono == TN_PERDIENDO) bandaFicha(s, on);
+    if (s.nivel && s.parpadea) bandaFicha(s, on);
   }
 }
 

@@ -63,7 +63,8 @@ void vistaPorDefecto() {             // centro = mediana de los controlados; zoo
 
 // ---------- el mapa se dibuja en memoria y se manda a la pantalla ----------
 // Dos sprites de 4 bits (16 colores) de media altura cada uno: 2 x 21,6 KB caben mejor en la RAM troceada
-enum : uint8_t { I_FONDO, I_REJ, I_E0, I_E1, I_E2, I_E3, I_E4, I_E5, I_E6, I_VERDE, I_AMAR, I_NAR, I_ROJO, I_BLANCO, I_NMED, I_ILUM };
+enum : uint8_t { I_FONDO, I_REJ, I_E0, I_E1, I_E2, I_E3, I_E4, I_E5, I_MOR, I_VERDE, I_AMAR, I_NAR, I_ROJO, I_BLANCO, I_NMED, I_ILUM };
+const int N_TONOS_ESTELA = 6;                      // tonos de la estela en la paleta (el 7.o hueco es el morado)
 const int MITAD = MH / 2;
 TFT_eSprite sprA(&tft), sprB(&tft);                // A = mitad de arriba, B = mitad de abajo
 bool sprOk = false;
@@ -91,14 +92,15 @@ void liberaSprite() { sprA.deleteSprite(); sprB.deleteSprite(); sprOk = false; }
 
 void preparaSprite() {
   paleta[I_FONDO] = FONDO; paleta[I_REJ] = REJILLA;
-  for (int i = 0; i < 7; i++) paleta[I_E0 + i] = estela[i * 2];      // 7 tonos de la estela
+  for (int i = 0; i < N_TONOS_ESTELA; i++) paleta[I_E0 + i] = estela[i * N_ESTELA / N_TONOS_ESTELA];   // 6 tonos de la estela
+  paleta[I_MOR] = MORADO;
   paleta[I_VERDE] = VERDE; paleta[I_AMAR] = AMAR; paleta[I_NAR] = NAR; paleta[I_ROJO] = ROJO;
   paleta[I_BLANCO] = BLANCO; paleta[I_NMED] = NAR_MED; paleta[I_ILUM] = ILUM;
   creaSprite();
 }
 
 uint8_t iColorInf(float inf) { return inf > 50 ? I_VERDE : inf > 20 ? I_AMAR : I_NAR; }
-uint8_t iTono(uint8_t t) { return t == TN_DISPUTA ? I_AMAR : t == TN_FAVOR ? I_VERDE : t == TN_AVISO ? I_NAR : I_ROJO; }
+uint8_t iTono(uint8_t t) { return t == TN_DISPUTA ? I_AMAR : t == TN_FAVOR ? I_VERDE : t == TN_AVISO ? I_NAR : t == TN_PEND ? I_MOR : I_ROJO; }
 
 // Todo se dibuja en una mitad "g" desplazada "oy" pixeles (lo que cae fuera se recorta solo)
 void cuna(TFT_eSprite &g, int oy, int a1, int a2, uint8_t c) {
@@ -113,7 +115,7 @@ void pintaSistema(TFT_eSprite &g, int oy, const Sis &s, bool iluminado) {
   if (s.ctrl) g.fillRect(x - 3, y - 3, 7, 7, c);
   else g.fillCircle(x, y, 2, c);
   uint8_t ct = iTono(s.tono);
-  bool aro = s.tono != TN_PERDIENDO || parpOn();  // PERDIENDO: el aro parpadea
+  bool aro = !s.parpadea || parpOn();             // conflicto en marcha: el aro parpadea
   if (s.nivel == 1 && aro) { g.drawCircle(x, y, 10, ct); g.drawCircle(x, y, 11, ct); }
   if (s.nivel == 2 && aro) { g.drawCircle(x, y, radioAro, ct); g.drawCircle(x, y, radioAro + 1, ct); }
   if (s.lab) {
@@ -128,7 +130,7 @@ void pintaMitad(TFT_eSprite &g, int oy) {
   for (int i = 1; i <= 3; i++) g.drawCircle(SCX, SCY - oy, R * i / 3, I_REJ);
   g.drawFastHLine(SCX - R, SCY - oy, 2 * R, I_REJ);
   g.drawFastVLine(SCX, SCY - oy - R, 2 * R, I_REJ);
-  for (int i = N_ESTELA - 1; i >= 0; i--) cuna(g, oy, angulo - (i + 1) * PASO, angulo - i * PASO, I_E0 + i / 2);
+  for (int i = N_ESTELA - 1; i >= 0; i--) cuna(g, oy, angulo - (i + 1) * PASO, angulo - i * PASO, I_E0 + i * N_TONOS_ESTELA / N_ESTELA);
   for (int i = 1; i <= 3; i++) g.drawCircle(SCX, SCY - oy, R * i / 3, I_REJ);   // la rejilla se ve a traves de la estela
   for (int i = 0; i < datos.n; i++) {
     const Sis &s = datos.s[i];

@@ -22,13 +22,13 @@ void accVisitas()   { pagVis = 0; pantallaVisitas(); }
 void accResumen()   { pantallaResumen(true); }
 void accSigVis()    { pagVis++; pantallaVisitas(); }
 int buscaHash(uint32_t h) { for (int i = 0; i < datos.n; i++) if (hashNombre(datos.s[i].nom) == h) return i; return -1; }
-int sigAtaque(uint32_t h) {                        // siguiente posible ataque despues de h (da la vuelta); -1 si no hay
+int sigAtaque(uint32_t h) {                        // siguiente alarma despues de h (da la vuelta); -1 si no hay
   int i0 = buscaHash(h);
-  for (int k = 1; k <= datos.n; k++) { int i = (i0 + k + datos.n) % datos.n; if (datos.s[i].ataque == 2) return i; }
+  for (int k = 1; k <= datos.n; k++) { int i = (i0 + k + datos.n) % datos.n; if (datos.s[i].alarma) return i; }
   return -1;
 }
 void accAleFicha()  { alertaFija = false; int i = buscaHash(alertaHash); fichaVuelve = MAPA; if (i >= 0) pantallaFicha(i); else pantallaMapa(); }
-void accAleSig()    { if (datos.ataques > 1) { int i = sigAtaque(alertaHash); if (i >= 0) alertaHash = hashNombre(datos.s[i].nom); pantallaAlerta(); } }
+void accAleSig()    { if (datos.alarmas > 1) { int i = sigAtaque(alertaHash); if (i >= 0) alertaHash = hashNombre(datos.s[i].nom); pantallaAlerta(); } }
 void accAleVisto()  { alertaFija = false; pantallaMapa(); }
 
 const Boton BOTONES[] = {
