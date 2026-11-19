@@ -98,6 +98,7 @@ void preparaSprite() {
 }
 
 uint8_t iColorInf(float inf) { return inf > 50 ? I_VERDE : inf > 20 ? I_AMAR : I_NAR; }
+uint8_t iTono(uint8_t t) { return t == TN_DISPUTA ? I_AMAR : t == TN_FAVOR ? I_VERDE : t == TN_AVISO ? I_NAR : I_ROJO; }
 
 // Todo se dibuja en una mitad "g" desplazada "oy" pixeles (lo que cae fuera se recorta solo)
 void cuna(TFT_eSprite &g, int oy, int a1, int a2, uint8_t c) {
@@ -111,10 +112,12 @@ void pintaSistema(TFT_eSprite &g, int oy, const Sis &s, bool iluminado) {
   uint8_t c = iluminado ? I_ILUM : iColorInf(s.inf);
   if (s.ctrl) g.fillRect(x - 3, y - 3, 7, 7, c);
   else g.fillCircle(x, y, 2, c);
-  if (s.nivel == 1) { g.drawCircle(x, y, 10, I_AMAR); g.drawCircle(x, y, 11, I_AMAR); }
-  if (s.nivel == 2) { g.drawCircle(x, y, radioAro, I_ROJO); g.drawCircle(x, y, radioAro + 1, I_ROJO); }
+  uint8_t ct = iTono(s.tono);
+  bool aro = s.tono != TN_PERDIENDO || parpOn();  // PERDIENDO: el aro parpadea
+  if (s.nivel == 1 && aro) { g.drawCircle(x, y, 10, ct); g.drawCircle(x, y, 11, ct); }
+  if (s.nivel == 2 && aro) { g.drawCircle(x, y, radioAro, ct); g.drawCircle(x, y, radioAro + 1, ct); }
   if (s.lab) {
-    g.setTextColor(s.nivel == 2 ? I_ROJO : s.nivel == 1 ? I_AMAR : s.ctrl ? I_BLANCO : I_NMED);
+    g.setTextColor(s.nivel ? ct : s.ctrl ? I_BLANCO : I_NMED);
     g.setTextDatum(ML_DATUM);
     g.drawString(s.nom, x + (s.nivel ? 16 : 9), y, 1);
   }

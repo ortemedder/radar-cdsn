@@ -12,6 +12,16 @@
 
 struct Fac { char n[24]; float inf; };
 
+// Color de cada aviso (la pantalla decide el color real)
+enum Tono : uint8_t {
+  TN_NADA,       // sin aviso
+  TN_AVISO,      // naranja: actividad inusual, bajada, expansion pendiente
+  TN_DISPUTA,    // amarillo (texto negro): conflicto empatado
+  TN_FAVOR,      // verde: defensa en curso (vamos ganando) o actividad a favor
+  TN_GRAVE,      // rojo fijo: posible ataque, retirada, ventaja baja, conflicto pendiente
+  TN_PERDIENDO   // rojo que parpadea: conflicto que vamos perdiendo
+};
+
 struct Sis {
   char nom[34];
   float x, z;            // posicion galactica (x = este, z = norte)
@@ -23,11 +33,13 @@ struct Sis {
   Fac f[MAX_FAC]; uint8_t nf;
   uint16_t trafHoy;
   uint16_t traf[DIAS_TRAF]; // pilotos por dia: [0] hoy, [1] ayer...
-  uint8_t ataque;        // 0 nada, 1 ACTIVIDAD INUSUAL (pico de visitas), 2 POSIBLE ATAQUE (pico y baja la influencia)
+  uint8_t ataque;        // 0 nada, 1 ACTIVIDAD INUSUAL (pico), 2 POSIBLE ATAQUE (pico y baja la influencia), 3 A FAVOR (pico y sube)
   bool picoAyer;         // el pico fue ayer (si no, hoy)
   float media7;          // media de pilotos de los 7 dias anteriores al pico (o a hoy si no hay pico)
   long t;                // hora del dato
-  uint8_t nivel;         // 0 nada, 1 aviso, 2 grave
+  uint8_t nivel;         // 0 nada, 1 aviso, 2 grave (orden de las alertas)
+  uint8_t tono;          // color del aviso (Tono)
+  bool espadas;          // conflicto activo: se pinta el icono de espadas
   char alerta[20];       // titulo corto (MAYUSCULAS, sin tildes)
   char aviso[56];        // explicacion
   float ang;             // angulo en el radar (lo calcula la pantalla)
@@ -50,7 +62,7 @@ struct Datos {
   int n = 0, sinSitio = 0;         // sistemas leidos y los que no cupieron
   long t = 0;            // hora del archivo
   long tickGlobal = 0;   // ultimo tick de la galaxia (tick.edcd.io, via el escucha)
-  int controlados = 0, alertas = 0, trafHoy = 0, ataques = 0, inusuales = 0;
+  int controlados = 0, alertas = 0, trafHoy = 0, ataques = 0, inusuales = 0, favor = 0;
 };
 
 // Quita tildes y pasa a ASCII (las fuentes de la pantalla no tienen tildes)
@@ -148,7 +160,8 @@ static void diaMenos(char *o, const char *hoy, int n) {
 }
 
 // Pico de visitas (mismas reglas que la web): hoy o ayer al menos 5 pilotos y el triple de la media
-// de los 7 dias anteriores. Si ademas la influencia baja 1 punto o mas desde ayer: posible ataque.
+// de los 7 dias anteriores. Si ademas la influencia baja 1 punto o mas desde ayer: posible ataque;
+// si sube medio punto o mas: actividad a favor (nuestra gente o ayuda externa).
 static void calculaPico(Sis &s) {
   s.ataque = 0; s.picoAyer = false;
   for (int k = 0; k <= 1; k++) {
@@ -157,7 +170,7 @@ static void calculaPico(Sis &s) {
     if (k == 0) s.media7 = m;
     if (s.traf[k] >= 5 && s.traf[k] >= 3 * (m > 1 ? m : 1)) {
       s.media7 = m; s.picoAyer = k == 1;
-      s.ataque = (!isnan(s.prev) && s.prev - s.inf >= 1.0f) ? 2 : 1;
+      s.ataque = isnan(s.prev) ? 1 : s.prev - s.inf >= 1.0f ? 2 : s.inf - s.prev >= 0.5f ? 3 : 1;
       return;
     }
   }
@@ -165,6 +178,7 @@ static void calculaPico(Sis &s) {
 static void textoPico(char *d, size_t n, const Sis &s) {     // "25 pilotos ayer (media 4.4), baja 1.2"
   int v = s.traf[s.picoAyer ? 1 : 0];
   if (s.ataque == 2) snprintf(d, n, "%d pilotos %s (media %.1f), baja %.1f", v, s.picoAyer ? "ayer" : "hoy", s.media7, s.prev - s.inf);
+  else if (s.ataque == 3) snprintf(d, n, "%d pilotos %s (media %.1f), sube %.1f", v, s.picoAyer ? "ayer" : "hoy", s.media7, s.inf - s.prev);
   else snprintf(d, n, "%d pilotos %s (media %.1f)", v, s.picoAyer ? "ayer" : "hoy", s.media7);
 }
 
@@ -179,7 +193,7 @@ static void preparaFiltro(JsonDocument &f) {
 }
 
 static void calculaAlerta(Sis &s, JsonObjectConst o) {
-  s.nivel = 0; s.alerta[0] = 0; s.aviso[0] = 0;
+  s.nivel = 0; s.tono = TN_NADA; s.espadas = false; s.alerta[0] = 0; s.aviso[0] = 0;
   char tmp[40];
   // 1) conflicto activo
   for (JsonObjectConst c : o["conflictos"].as<JsonArrayConst>()) {
@@ -188,48 +202,53 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
     ascii(tmp, c["contra"] | "?", sizeof tmp);
     int g = c["ganados"] | 0, p = c["perdidos"] | 0;
     s.ganados = g; s.perdidos = p;
-    if (!strcmp(est, "active")) {
-      snprintf(s.alerta, sizeof s.alerta, "%s", t);
-      snprintf(s.aviso, sizeof s.aviso, "contra %s, dias %d-%d", tmp, g, p);
+    if (!strcmp(est, "active")) {                  // marcador: vamos ganando, empate o perdiendo
+      const char *tt = !strcmp(tipo, "war") ? "Guerra" : !strcmp(tipo, "civilwar") ? "Guerra civil" : "Elecciones";
+      if (g > p) { strcpy(s.alerta, "DEFENSA EN CURSO"); s.tono = TN_FAVOR; }
+      else if (g == p) { strcpy(s.alerta, "DISPUTADO"); s.tono = TN_DISPUTA; }
+      else { strcpy(s.alerta, "PERDIENDO"); s.tono = TN_PERDIENDO; }
+      snprintf(s.aviso, sizeof s.aviso, "%s contra %s, dias %d-%d", tt, tmp, g, p);
       snprintf(s.conf, sizeof s.conf, "%s contra %s", t, tmp);
-      s.confActivo = true; s.nivel = 2; return;
+      s.confActivo = true; s.espadas = true; s.nivel = 2; return;
     }
     if (!strcmp(est, "pending")) {
       s.confPend = true;
       snprintf(s.conf, sizeof s.conf, "%s pendiente contra %s", t, tmp);
       snprintf(s.alerta, sizeof s.alerta, "%s PEND.", t);
       snprintf(s.aviso, sizeof s.aviso, "contra %s", tmp);
-      s.nivel = 2; return;
+      s.nivel = 2; s.tono = TN_GRAVE; return;
     }
   }
   JsonArrayConst act = o["activos"], pen = o["pendientes"];
   // 2) retirada
   if (contiene(act, "Retreat") || contiene(pen, "Retreat")) {
-    strcpy(s.alerta, "RETIRADA"); snprintf(s.aviso, sizeof s.aviso, "influencia %.1f %%", s.inf); s.nivel = 2; return;
+    strcpy(s.alerta, "RETIRADA"); snprintf(s.aviso, sizeof s.aviso, "influencia %.1f %%", s.inf); s.nivel = 2; s.tono = TN_GRAVE; return;
   }
   // 3) ventaja baja en sistema controlado
   float seg = o["segunda_inf"] | 0.0f;
   if (s.ctrl && s.inf - seg < 5.0f) {
     ascii(tmp, o["segunda"] | "?", sizeof tmp);
     strcpy(s.alerta, "VENTAJA BAJA");
-    snprintf(s.aviso, sizeof s.aviso, "solo %.1f puntos sobre %s", s.inf - seg, tmp); s.nivel = 2; return;
+    snprintf(s.aviso, sizeof s.aviso, "solo %.1f puntos sobre %s", s.inf - seg, tmp); s.nivel = 2; s.tono = TN_GRAVE; return;
   }
   // 4) posible ataque: pico de visitas y baja la influencia
-  if (s.ataque == 2) { strcpy(s.alerta, "POSIBLE ATAQUE"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 2; return; }
+  if (s.ataque == 2) { strcpy(s.alerta, "POSIBLE ATAQUE"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 2; s.tono = TN_GRAVE; return; }
   // 5) bajada fuerte desde ayer
   if (!isnan(s.prev) && s.prev - s.inf >= 3.0f) {
     strcpy(s.alerta, "BAJADA");
-    snprintf(s.aviso, sizeof s.aviso, "%.1f puntos desde ayer", s.inf - s.prev); s.nivel = 1; return;
+    snprintf(s.aviso, sizeof s.aviso, "%.1f puntos desde ayer", s.inf - s.prev); s.nivel = 1; s.tono = TN_AVISO; return;
   }
   // 6) actividad inusual: pico de visitas sin bajada
-  if (s.ataque == 1) { strcpy(s.alerta, "ACTIVIDAD INUSUAL"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 1; return; }
+  if (s.ataque == 1) { strcpy(s.alerta, "ACTIVIDAD INUSUAL"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 1; s.tono = TN_AVISO; return; }
+  // 6b) actividad a favor: pico de visitas y sube la influencia (nuestra gente o ayuda externa)
+  if (s.ataque == 3) { strcpy(s.alerta, "ACTIVIDAD A FAVOR"); textoPico(s.aviso, sizeof s.aviso, s); s.nivel = 1; s.tono = TN_FAVOR; return; }
   // 7) expansion pendiente
   if (contiene(pen, "Expansion")) {
     strcpy(s.alerta, "EXPANSION PEND.");
     if (seg > 0) { ascii(tmp, o["segunda"] | "?", sizeof tmp);
       if (s.inf >= seg) snprintf(s.aviso, sizeof s.aviso, "ventaja de %.1f sobre %s", s.inf - seg, tmp);
       else snprintf(s.aviso, sizeof s.aviso, "a %.1f puntos de %s", seg - s.inf, tmp); }
-    s.nivel = 1; return;
+    s.nivel = 1; s.tono = TN_AVISO; return;
   }
 }
 
@@ -279,7 +298,7 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
   if (!L.busca("\"sistemas\"") || L.salta() != ':' || L.salta() != '{') { snprintf(err, errmax, "JSON: sin sistemas"); return false; }
   JsonDocument filtro; preparaFiltro(filtro);
   JsonDocument doc;                                  // un solo sistema cada vez
-  int n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, sin = 0;
+  int n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, fav = 0, sin = 0;
   char clave[48];
   while (true) {
     int c = L.salta();
@@ -297,14 +316,14 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
     if (n >= d.cap) { sin++; continue; }                        // no cabe: se cuenta para avisar
     Sis &s = d.s[n];
     llenaSistema(s, o, clave, hoy);
-    ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy; at += s.ataque == 2; inu += s.ataque == 1;
+    ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy; at += s.ataque == 2; inu += s.ataque == 1; fav += s.ataque == 3;
     n++;
   }
   // despues de "sistemas" vienen la hora del archivo y el tick global
   long t = 0, tg = 0;
   if (L.busca("\"t\"") && L.salta() == ':') t = (long)L.numero();
   if (L.busca("\"tick_global\"") && L.salta() == ':') tg = (long)L.numero();
-  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.sinSitio = sin;
+  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.favor = fav; d.sinSitio = sin;
   d.t = t; d.tickGlobal = tg;
   return true;
 }

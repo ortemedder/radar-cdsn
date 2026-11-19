@@ -4,8 +4,9 @@
 // ---------- VISITAS ----------
 // Orden: posible ataque, actividad inusual y despues por pilotos de hoy (y de ayer).
 // Solo salen los sistemas con alguna visita en los ultimos DIAS_LISTA dias, y siempre los que tienen pico.
+static int rangoPico(uint8_t a) { return a == 2 ? 3 : a == 1 ? 2 : a == 3 ? 1 : 0; }   // ataque, inusual, a favor
 static bool antesVis(const Sis &a, const Sis &b) {
-  if (a.ataque != b.ataque) return a.ataque > b.ataque;
+  if (a.ataque != b.ataque) return rangoPico(a.ataque) > rangoPico(b.ataque);
   if (a.traf[0] != b.traf[0]) return a.traf[0] > b.traf[0];
   return a.traf[1] > b.traf[1];
 }
@@ -29,11 +30,12 @@ void pantallaVisitas() {
   char t[64], u[64];
   // resumen de arriba
   tft.setTextDatum(TL_DATUM);
-  if (!datos.ataques && !datos.inusuales) { tft.setTextColor(VERDE); tft.drawString("Sin picos de visitas", 6, 32, 2); }
+  if (!datos.ataques && !datos.inusuales && !datos.favor) { tft.setTextColor(VERDE); tft.drawString("Sin picos de visitas", 6, 32, 2); }
   else {
     int x = 6;
     if (datos.ataques) { snprintf(t, sizeof t, "POSIBLE ATAQUE: %d", datos.ataques); tft.setTextColor(ROJO); tft.drawString(t, x, 32, 2); x += tft.textWidth(t, 2) + 16; }
-    if (datos.inusuales) { snprintf(t, sizeof t, "ACTIVIDAD INUSUAL: %d", datos.inusuales); tft.setTextColor(AMAR); tft.drawString(t, x, 32, 2); }
+    if (datos.inusuales) { snprintf(t, sizeof t, "INUSUAL: %d", datos.inusuales); tft.setTextColor(NAR_AV); tft.drawString(t, x, 32, 2); x += tft.textWidth(t, 2) + 16; }
+    if (datos.favor) { snprintf(t, sizeof t, "A FAVOR: %d", datos.favor); tft.setTextColor(VERDE); tft.drawString(t, x, 32, 2); }
   }
   snprintf(t, sizeof t, "%d hoy", datos.trafHoy);
   tft.setTextDatum(TR_DATUM); tft.setTextColor(AZUL); tft.drawString(t, 476, 32, 2);
@@ -46,9 +48,9 @@ void pantallaVisitas() {
   for (int k = 0; k < VFILAS; k++) {
     int j = pagVis * VFILAS + k; if (j >= nVis) break;
     const Sis &s = datos.s[ordenVis[j]]; int y = VLIS_Y + k * LISTA_PASO;
-    uint16_t c = s.ataque == 2 ? ROJO : s.ataque == 1 ? AMAR : s.ctrl ? BLANCO : NAR_MED;
+    uint16_t c = s.ataque == 2 ? ROJO : s.ataque == 1 ? NAR_AV : s.ataque == 3 ? VERDE : s.ctrl ? BLANCO : NAR_MED;
     tft.setTextDatum(TL_DATUM); tft.setTextColor(c); corta(u, s.nom, 200, 2); tft.drawString(u, 6, y, 2);
-    if (s.ataque) tft.drawString(s.ataque == 2 ? "ATAQUE?" : "INUSUAL", 214, y + 4, 1);
+    if (s.ataque) tft.drawString(s.ataque == 2 ? "ATAQUE?" : s.ataque == 1 ? "INUSUAL" : "A FAVOR", 214, y + 4, 1);
     tft.setTextDatum(TR_DATUM);
     snprintf(t, sizeof t, "%d", s.traf[0]);
     tft.setTextColor(s.ataque && !s.picoAyer ? c : AZUL); tft.drawString(t, 350, y, 2);
@@ -64,7 +66,7 @@ void pantallaVisitas() {
     tft.setTextColor(NAR); tft.setTextDatum(MC_DATUM); tft.drawString(t, LSIG_X + LSIG_W / 2, VOLVER_Y + VOLVER_H / 2, 2);
   }
   tft.setTextColor(NAR_OSC); tft.setTextDatum(TL_DATUM);
-  tft.drawString("ATAQUE? = pico + baja inf.", LSIG_X + LSIG_W + 8, VOLVER_Y + 4, 1);
+  tft.drawString("ATAQUE? baja inf. / A FAVOR sube", LSIG_X + LSIG_W + 8, VOLVER_Y + 4, 1);
   tft.drawString("titulo: RESUMEN", LSIG_X + LSIG_W + 8, VOLVER_Y + 18, 1);
   dibujaBotones(VISITAS);
 }
@@ -107,7 +109,7 @@ void pantallaResumen(bool mover) {
     tft.drawString(u, ANCHO / 2 + ox, 176 + oy, 2);
   } else { tft.setTextColor(NAR_MED); tft.drawString("PROX. TICK: aprendiendo...", ANCHO / 2 + ox, 152 + oy, 4); }
   // cifras
-  int graves = 0; for (int i = 0; i < datos.n; i++) graves += datos.s[i].nivel == 2;
+  int graves = 0; for (int i = 0; i < datos.n; i++) graves += datos.s[i].tono == TN_GRAVE || datos.s[i].tono == TN_PERDIENDO;
   snprintf(t, sizeof t, "%d de %d", datos.controlados, datos.n);
   cajaResumen(14 + ox, 196 + oy, "CONTROLADOS", t, BLANCO);
   snprintf(t, sizeof t, "%d", datos.alertas);
@@ -123,7 +125,7 @@ void pantallaResumen(bool mover) {
   tft.setTextDatum(MC_DATUM);
   if (t[0]) {
     snprintf(u, sizeof u, "%s:", datos.ataques ? "POSIBLE ATAQUE" : "ACTIVIDAD INUSUAL");
-    tft.setTextColor(datos.ataques ? ROJO : AMAR); tft.drawString(u, ANCHO / 2 + ox, 270 + oy, 2);
+    tft.setTextColor(datos.ataques ? ROJO : NAR_AV); tft.drawString(u, ANCHO / 2 + ox, 270 + oy, 2);
     corta(u, t, 460, 2); tft.setTextColor(BLANCO); tft.drawString(u, ANCHO / 2 + ox, 288 + oy, 2);
   } else { tft.setTextColor(VERDE); tft.drawString("Sin picos de visitas", ANCHO / 2 + ox, 278 + oy, 2); }
   if (datos.sinSitio) {                            // la faccion ya no cabe en la tabla

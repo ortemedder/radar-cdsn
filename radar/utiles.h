@@ -44,6 +44,44 @@ void haceTexto(char *d, size_t n, long t) {                      // "hace 12 min
 uint16_t colorInf(float inf) { return inf > 50 ? VERDE : inf > 20 ? AMAR : NAR; }
 uint16_t colorNivel(uint8_t nv) { return nv == 2 ? ROJO : AMAR; }
 
+// ---------- colores de los avisos (ver Tono en datos.h) ----------
+bool parpOn() { return (millis() / 500) % 2 == 0; }              // fase del parpadeo (medio segundo)
+uint16_t colorTono(uint8_t t, bool on = true) {                  // color del borde / texto
+  switch (t) {
+    case TN_AVISO: return NAR_AV;
+    case TN_DISPUTA: return AMAR_AV;
+    case TN_FAVOR: return VERDE;
+    case TN_GRAVE: return ROJO;
+    case TN_PERDIENDO: return on ? ROJO : ROJO_OSC;
+    default: return BLANCO;
+  }
+}
+uint16_t textoTono(uint8_t t) { return t == TN_DISPUTA || t == TN_FAVOR ? TFT_BLACK : BLANCO; }   // texto sobre la banda
+uint16_t colorSis(const Sis &s) { return s.nivel ? colorTono(s.tono) : BLANCO; }
+
+// Icono de dos espadas cruzadas (14 x 14) en x,y (esquina de arriba a la izquierda)
+void espadas(int x, int y, uint16_t c) {
+  for (int k = 0; k < 2; k++) {                   // hojas (2 px de gruesas)
+    tft.drawLine(x + 1 + k, y + 1, x + 11 + k, y + 11, c);
+    tft.drawLine(x + 12 - k, y + 1, x + 2 - k, y + 11, c);
+  }
+  tft.drawLine(x + 7, y + 10, x + 10, y + 7, c);  // guardas
+  tft.drawLine(x + 3, y + 7, x + 6, y + 10, c);
+  tft.fillRect(x, y + 12, 2, 2, c); tft.fillRect(x + 12, y + 12, 2, 2, c);   // pomos
+}
+
+// Banda de titulo de un aviso: fondo del color del tono y texto encima (con espadas si hay conflicto).
+// La de PERDIENDO se vuelve a pintar cada medio segundo para que parpadee.
+void bandaAviso(int x, int y, int w, int h, const Sis &s, int fuente, bool on = true) {
+  uint16_t fondo = colorTono(s.tono, on), txt = textoTono(s.tono);
+  tft.fillRoundRect(x, y, w, h, 3, fondo);
+  int tx = x + 4;
+  if (s.espadas) { espadas(tx, y + (h - 14) / 2, txt); tx += 18; }
+  char u[64]; corta(u, s.alerta, x + w - tx - 4, fuente);
+  tft.setTextColor(txt); tft.setTextDatum(ML_DATUM); tft.drawString(u, tx, y + h / 2 + 1, fuente);
+  tft.setTextDatum(TL_DATUM);
+}
+
 bool dentro(int x, int y, int x0, int y0, int w, int h) { return x >= x0 && x < x0 + w && y >= y0 && y < y0 + h; }
 
 uint32_t hashNombre(const char *s) { uint32_t h = 2166136261u; while (*s) { h ^= (uint8_t)*s++; h *= 16777619u; } return h; }

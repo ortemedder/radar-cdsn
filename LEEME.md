@@ -92,3 +92,5 @@ Imágenes de prueba en `imagenes/`.
 - v2.5: pantalla de alerta POSIBLE ATAQUE: sale sola cuando aparece un posible ataque nuevo (enciende la pantalla aunque esté en negro), con marco rojo que late, pilotos, influencia y próximo tick;
   se queda hasta pulsar VISTO o VER FICHA (SIGUIENTE si hay varios). Mientras haya algún posible ataque, el carrusel la incluye 30 s en cada vuelta.
   VISITAS solo muestra los sistemas con alguna visita en los últimos 5 días (y siempre los que tienen pico).
+
+- v2.6: colores de aviso nuevos. Conflictos según el marcador: DEFENSA EN CURSO (verde, vamos ganando), DISPUTADO (amarillo con texto negro, empate) y PERDIENDO (rojo que parpadea); los tres llevan el icono de espadas. Pico de visitas con subida de influencia ≥ 0,5: ACTIVIDAD A FAVOR (verde, gente propia o ayuda externa). ACTIVIDAD INUSUAL y demás avisos en naranja; POSIBLE ATAQUE y graves en rojo fijo. Pantalla de PRUEBA DE COLORES al arrancar (8 s, un toque la quita; `#define PRUEBA_COLORES 0` en mi_wifi.h para quitarla).

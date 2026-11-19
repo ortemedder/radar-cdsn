@@ -56,6 +56,13 @@ void dibujaGrafica(const Sis &s) {
   tft.setTextDatum(TC_DATUM); tft.drawString(t, x0 + w / 2, y0 + h + 4, 1);
 }
 
+// marco y banda del aviso de la ficha (se repinta para el parpadeo de PERDIENDO)
+void bandaFicha(const Sis &s, bool on) {
+  uint16_t cc = colorTono(s.tono, on);
+  tft.drawRoundRect(4, 108, 472, 42, 6, cc); tft.drawRoundRect(5, 109, 470, 40, 5, cc);
+  bandaAviso(8, 111, 300, 17, s, 2, on);
+}
+
 void pantallaFicha(int i) {
   modo = FICHA; fichaSis = i; tFicha = millis();
   vista(i);
@@ -92,9 +99,7 @@ void pantallaFicha(int i) {
   fichaTick(s, 200, 72);
   // aviso
   if (s.nivel) {
-    uint16_t cc = colorNivel(s.nivel);
-    tft.drawRoundRect(4, 108, 472, 42, 6, cc); tft.drawRoundRect(5, 109, 470, 40, 5, cc);
-    tft.setTextColor(cc); tft.drawString(s.alerta, 12, 111, 2);
+    bandaFicha(s, true);
     tft.setTextColor(BLANCO); corta(u, s.aviso, 456, 2); tft.drawString(u, 12, 129, 2);
   } else {
     tft.drawRoundRect(4, 108, 472, 42, 6, NAR_OSC);
@@ -159,7 +164,7 @@ void pantallaLista() {
   for (int k = 0; k < FILAS; k++) {
     int j = pagLista * FILAS + k; if (j >= nLista) break;
     Sis &s = datos.s[ordenLista[j]]; int y = LISTA_Y + k * LISTA_PASO;
-    uint16_t c = s.nivel ? colorNivel(s.nivel) : BLANCO;
+    uint16_t c = colorSis(s);
     tft.setTextDatum(TL_DATUM); tft.setTextColor(c); corta(u, s.nom, 230, 2); tft.drawString(u, 6, y, 2);
     if (s.nivel) { corta(u, s.alerta, 80, 1); tft.drawString(u, 244, y + 4, 1); }
     float margen = s.nf > 1 ? s.f[0].inf - s.f[1].inf : s.inf;

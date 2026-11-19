@@ -102,6 +102,31 @@ void panelTick() {
   tft.setTextDatum(TL_DATUM); tft.setTextColor(NAR_MED); tft.drawString(u, PX + 2, TICK_Y + 17, 1);
 }
 
+// banda de titulo de la caja k del panel (deja sitio a la etiqueta NUEVA)
+void bandaPanel(int k, const Sis &s, bool on) {
+  int y = AL_Y + k * AL_PASO;
+  bandaAviso(PX + 2, y + 2, s.nueva ? ANCHO - 60 - (PX + 2) : PW - 4, 17, s, 2, on);
+}
+
+// Parpadeo de los avisos PERDIENDO (cajas del panel y ficha): se repinta solo la banda cada medio segundo
+void tickParpadeo() {
+  static bool antes = true;
+  bool on = parpOn(); if (on == antes) return;
+  antes = on;
+  if (modo == MAPA) {
+    for (int k = 0; k < AL_N; k++) {
+      int i = orden[pagAlerta * AL_N + k]; if (i < 0) break;
+      const Sis &s = datos.s[i];
+      if (s.tono != TN_PERDIENDO) continue;
+      tft.drawRoundRect(PX, AL_Y + k * AL_PASO, PW, AL_H, 5, colorTono(s.tono, on));
+      bandaPanel(k, s, on);
+    }
+  } else if (modo == FICHA && fichaSis >= 0 && fichaSis < datos.n) {
+    const Sis &s = datos.s[fichaSis];
+    if (s.nivel && s.tono == TN_PERDIENDO) bandaFicha(s, on);
+  }
+}
+
 void panel() {
   tft.fillRect(PX, TIT_H + 3, ANCHO - PX, ALTO - TIT_H - 3, TFT_BLACK);
   char t[64];
@@ -117,10 +142,9 @@ void panel() {
   for (int k = 0; k < AL_N; k++) {
     int i = orden[pagAlerta * AL_N + k]; if (i < 0) break;
     Sis &s = datos.s[i]; int y = AL_Y + k * AL_PASO;
-    uint16_t cc = colorNivel(s.nivel);
+    uint16_t cc = colorTono(s.tono);
     tft.drawRoundRect(PX, y, PW, AL_H, 5, cc);
-    tft.setTextColor(cc);
-    corta(t, s.alerta, s.nueva ? 100 : PW - 10, 2); tft.drawString(t, PX + 6, y + 2, 2);
+    bandaPanel(k, s, true);
     if (s.nueva) {                                 // etiqueta NUEVA
       tft.fillRoundRect(ANCHO - 56, y + 3, 50, 14, 3, cc);
       tft.setTextColor(TFT_BLACK); tft.setTextDatum(MC_DATUM); tft.drawString("NUEVA", ANCHO - 31, y + 10, 1);
