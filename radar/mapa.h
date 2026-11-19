@@ -62,11 +62,11 @@ void vistaPorDefecto() {             // centro = mediana de los controlados; zoo
 }
 
 // ---------- el mapa se dibuja en memoria y se manda a la pantalla ----------
-// Dos sprites de 4 bits (16 colores) de media altura cada uno: 2 x 21,6 KB caben mejor en la RAM troceada
+// Cuatro sprites de 4 bits (16 colores) de un cuarto de altura: 4 x 10,8 KB caben aunque la RAM quede troceada tras el WiFi
 enum : uint8_t { I_FONDO, I_REJ, I_E0, I_E1, I_E2, I_E3, I_E4, I_E5, I_MOR, I_VERDE, I_AMAR, I_NAR, I_ROJO, I_BLANCO, I_NMED, I_ILUM };
 const int N_TONOS_ESTELA = 6;                      // tonos de la estela en la paleta (el 7.o hueco es el morado)
-const int MITAD = MH / 2;
-TFT_eSprite sprA(&tft), sprB(&tft);                // A = mitad de arriba, B = mitad de abajo
+const int N_PARTES = 4, MITAD = MH / N_PARTES;    // MITAD = alto de cada trozo (72 px)
+TFT_eSprite spr[N_PARTES] = {TFT_eSprite(&tft), TFT_eSprite(&tft), TFT_eSprite(&tft), TFT_eSprite(&tft)};   // de arriba a abajo
 bool sprOk = false;
 uint16_t paleta[16];
 const int SCX = CX - MX, SCY = CY - MY;            // centro del radar dentro del mapa
@@ -81,13 +81,14 @@ bool creaMitad(TFT_eSprite &g) {
 
 void creaSprite() {
   if (sprOk) return;
-  sprOk = creaMitad(sprA) && creaMitad(sprB);      // si solo cabe una mitad, se guarda y se reintenta la otra
+  sprOk = true;
+  for (int k = 0; k < N_PARTES && sprOk; k++) sprOk = creaMitad(spr[k]);   // si no caben todos, se guardan los que haya y se reintenta
   static bool avisado = false;
   if (sprOk || !avisado) Serial.printf("Mapa en memoria: %s, RAM libre %u (bloque mayor %u)\n",
                                        sprOk ? "OK" : "SIN MEMORIA", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   avisado = !sprOk;
 }
-void liberaSprite() { sprA.deleteSprite(); sprB.deleteSprite(); sprOk = false; }
+void liberaSprite() { for (auto &g : spr) g.deleteSprite(); sprOk = false; }
 
 void preparaSprite() {
   paleta[I_FONDO] = FONDO; paleta[I_REJ] = REJILLA;
@@ -143,18 +144,14 @@ void pintaMitad(TFT_eSprite &g, int oy) {
   g.setTextDatum(BR_DATUM); g.drawString(t, MW - 3, MH - 2 - oy, 1);
 }
 
-void pintaMapa() { pintaMitad(sprA, 0); pintaMitad(sprB, MITAD); }
+void pintaMapa() { for (int k = 0; k < N_PARTES; k++) pintaMitad(spr[k], k * MITAD); }
 
 void mandaZona(int x0, int y0, int x1, int y1) {   // manda a la pantalla un trozo del mapa (coordenadas del mapa)
   x0 = max(0, x0); y0 = max(0, y0); x1 = min(MW - 1, x1); y1 = min(MH - 1, y1);
   if (x1 < x0 || y1 < y0) return;
-  if (y0 < MITAD) {                                // parte de arriba
-    int b = min(y1, MITAD - 1);
-    sprA.pushSprite(MX + x0, MY + y0, x0, y0, x1 - x0 + 1, b - y0 + 1);
-  }
-  if (y1 >= MITAD) {                               // parte de abajo
-    int a = max(y0, MITAD);
-    sprB.pushSprite(MX + x0, MY + a, x0, a - MITAD, x1 - x0 + 1, y1 - a + 1);
+  for (int k = 0; k < N_PARTES; k++) {             // cada trozo que toca la zona
+    int a = max(y0, k * MITAD), b = min(y1, (k + 1) * MITAD - 1);
+    if (a <= b) spr[k].pushSprite(MX + x0, MY + a, x0, a - k * MITAD, x1 - x0 + 1, b - a + 1);
   }
 }
 
@@ -166,7 +163,7 @@ void dibujaMapaEntero() {
     return;
   }
   pintaMapa();
-  sprA.pushSprite(MX, MY); sprB.pushSprite(MX, MY + MITAD);
+  for (int k = 0; k < N_PARTES; k++) spr[k].pushSprite(MX, MY + k * MITAD);
 }
 
 // Cada paso: avanza la barra y el latido, repinta en memoria y manda solo lo que cambia
