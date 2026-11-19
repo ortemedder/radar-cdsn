@@ -258,8 +258,8 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
         {"derrota", "SISTEMA EN DERROTA", TN_GRAVE, true, true},  {"sin_remedio", "SISTEMA EN DERROTA", TN_GRAVE, true, true}};
       int k = 0; while (k < 7 && strcmp(F[k].f, f)) k++;   // fase desconocida: la ultima (derrota)
       strcpy(s.alerta, F[k].tit); s.tono = F[k].tono; s.parpadea = F[k].parp; s.alarma = F[k].alarma;
-      snprintf(s.aviso, sizeof s.aviso, "%s contra %s - dia %s%d/%d - %d-%d%s", tt, tmp, s.diaExacto ? "" : ">=", s.dia, DIAS_CONF, g, p,
-               !strcmp(f, "sin_remedio") ? " (sin remedio)" : "");
+      snprintf(s.aviso, sizeof s.aviso, "%d-%d  dia %s%d/%d%s  %s contra %s", g, p, s.diaExacto ? "" : ">=", s.dia, DIAS_CONF,   // marcador delante: no se corta
+               !strcmp(f, "sin_remedio") ? " sin remedio" : "", tt, tmp);
       snprintf(s.conf, sizeof s.conf, "%s contra %s", t, tmp);
       s.confActivo = true; s.nivel = 2; s.ataque = 0; return;
     }
