@@ -81,8 +81,7 @@ bool creaMitad(TFT_eSprite &g) {
 
 void creaSprite() {
   if (sprOk) return;
-  sprOk = creaMitad(sprA) && creaMitad(sprB);
-  if (!sprOk) { sprA.deleteSprite(); sprB.deleteSprite(); }
+  sprOk = creaMitad(sprA) && creaMitad(sprB);      // si solo cabe una mitad, se guarda y se reintenta la otra
   static bool avisado = false;
   if (sprOk || !avisado) Serial.printf("Mapa en memoria: %s, RAM libre %u (bloque mayor %u)\n",
                                        sprOk ? "OK" : "SIN MEMORIA", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
