@@ -6,7 +6,7 @@
 #include <TFT_eSPI.h>
 #include "datos.h"
 
-#define VERSION "v2.6"      // subir el numero en cada cambio
+#define VERSION "v2.6.1"      // subir el numero en cada cambio
 #if CONFIG_IDF_TARGET_ESP32S3
 #error "Este radar es para el ESP32 normal: Herramientas -> Placa -> ESP32 Dev Module"
 #endif

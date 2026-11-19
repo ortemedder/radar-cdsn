@@ -20,7 +20,9 @@ void hoyUTC(char *d) {
 }
 
 bool descarga() {
-  liberaSprite();                                  // deja sitio para el JSON (se recrea al repintar)
+  // El mapa se queda en memoria: el JSON se lee sistema a sistema y cabe de sobra. Soltarlo y volver a pedirlo
+  // despues del WiFi fallaba porque la RAM queda troceada (v2.6.1). Solo se suelta si de verdad falta RAM.
+  if (ESP.getFreeHeap() < 60000 || ESP.getMaxAllocHeap() < 24000) liberaSprite();
   Serial.printf("RAM libre antes de descargar: %u (bloque mayor %u)\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   if (!conectaWifi()) { strcpy(ultimoError, "sin WiFi"); apagaWifi(); return false; }
   WiFiClientSecure cli; cli.setInsecure();
