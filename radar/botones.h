@@ -30,6 +30,8 @@ int sigAtaque(uint32_t h) {                        // siguiente alarma despues d
 void accAleFicha()  { alertaFija = false; int i = buscaHash(alertaHash); fichaVuelve = MAPA; if (i >= 0) pantallaFicha(i); else pantallaMapa(); }
 void accAleSig()    { if (datos.alarmas > 1) { int i = sigAtaque(alertaHash); if (i >= 0) alertaHash = hashNombre(datos.s[i].nom); pantallaAlerta(); } }
 void accAleVisto()  { alertaFija = false; pantallaMapa(); }
+void actualizaFirmware();
+void accActualizar() { if (hayNueva()) actualizaFirmware(); }
 
 const Boton BOTONES[] = {
   {MAPA,  PX,                BOT_Y, BOT_W, BOT_H, "+", accZoomMas},
@@ -49,6 +51,8 @@ const Boton BOTONES[] = {
   {ALERTA, ALE_B1, ALE_BY, ALE_BW, ALE_BH, "VER FICHA", accAleFicha},
   {ALERTA, ALE_B2, ALE_BY, ALE_BW, ALE_BH, nullptr, accAleSig},      // SIGUIENTE (solo si hay mas de uno)
   {ALERTA, ALE_B3, ALE_BY, ALE_BW, ALE_BH, nullptr, accAleVisto},    // VISTO (relleno rojo, se dibuja aparte)
+  {ESTADO, VOLVER_X, VOLVER_Y, VOLVER_W, VOLVER_H, "VOLVER", accMapa},
+  {ESTADO, LSIG_X, VOLVER_Y, 250, VOLVER_H, nullptr, accActualizar},   // ACTUALIZAR (solo si hay version nueva)
 };
 const int NBOT = sizeof(BOTONES) / sizeof(BOTONES[0]);
 

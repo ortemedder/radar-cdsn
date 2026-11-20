@@ -10,6 +10,7 @@
 //   panel.h    titulo, panel y alertas         ficha.h   ficha de sistema y lista
 //   red.h      WiFi y descarga                 mi_wifi.h TU WiFi (no se toca al actualizar)
 //   visitas.h  paginas VISITAS y RESUMEN, salvapantallas (carrusel)
+//   estado.h   WiFi guardado, datos guardados, actualizacion sin cable (OTA) y pantalla ESTADO
 
 #include <new>
 #include "config.h"
@@ -20,13 +21,14 @@
 #include "ficha.h"
 #include "red.h"
 #include "visitas.h"
+#include "estado.h"
 
 void toque(int x, int y) {
   if (pulsaBoton(x, y)) return;                    // botones de la tabla (todas las pantallas)
   if (modo == LISTA) { tocaLista(x, y); return; }
   if (modo == VISITAS) { tocaVisitas(x, y); return; }
   if (modo == RESUMEN) { pantallaMapa(); return; }  // cualquier toque: al mapa
-  if (modo == ALERTA) return;                      // solo los botones
+  if (modo == ALERTA || modo == ESTADO) return;   // solo los botones
   if (modo != MAPA) return;
   fichaVuelve = MAPA;
   for (int k = 0; k < AL_N; k++) {                 // cajas de alerta
@@ -72,44 +74,6 @@ void presentacion() {
   delay(3000);
 }
 
-// Pantalla de prueba: los 5 colores de aviso tal y como salen en el panel. Un toque la quita.
-void pruebaColores() {
-#if PRUEBA_COLORES
-  struct { uint8_t tono, icono; bool parp; const char *tit, *exp; } m[] = {
-    {TN_GRAVE,   IC_ESPADAS, true,  "SISTEMA EN DERROTA", "vamos perdiendo / dia decisivo"},
-    {TN_GRAVE,   IC_NADA,    false, "POSIBLE ATAQUE",     "visitas y baja la influencia"},
-    {TN_PEND,    IC_SOBRE,   false, "ELECCIONES PEND.",   "empieza en el proximo tick"},
-    {TN_DISPUTA, IC_ESPADAS, true,  "DISPUTADO",          "empate (fijo si 0-0 dias 1-3)"},
-    {TN_AVISO,   IC_NADA,    false, "ACTIVIDAD INUSUAL",  "visitas, sin cambio claro"},
-    {TN_FAVOR,   IC_SOBRE,   true,  "DEFENSA EN CURSO",   "vamos ganando (fijo: victoria)"},
-    {TN_FAVOR,   IC_NADA,    false, "ACTIVIDAD A FAVOR",  "visitas y sube (propia o ayuda)"},
-  };
-  const int N = sizeof m / sizeof m[0];
-  Sis s; memset(&s, 0, sizeof s);
-  tft.fillScreen(TFT_BLACK);
-  titulo("PRUEBA DE COLORES", "toca para seguir");
-  auto pinta = [&](bool on) {
-    for (int k = 0; k < N; k++) {
-      int y = 34 + k * 40;
-      s.tono = m[k].tono; s.icono = m[k].icono; s.parpadea = m[k].parp; strncpy(s.alerta, m[k].tit, sizeof s.alerta - 1);
-      if (on || s.parpadea) bandaAviso(8, y, 210, 22, s, 2, on);
-      uint16_t ca = colorTono(s.tono, on || !s.parpadea);
-      tft.drawCircle(244, y + 11, 10, ca); tft.drawCircle(244, y + 11, 11, ca);   // aro del mapa
-      if (!on) continue;
-      tft.setTextColor(colorTono(s.tono)); tft.setTextDatum(TL_DATUM); tft.drawString(m[k].tit, 266, y + 1, 1);   // texto de las listas
-      tft.setTextColor(NAR_MED); tft.drawString(m[k].exp, 266, y + 13, 1);
-    }
-  };
-  pinta(true);
-  uint32_t t0 = millis(); bool on = true; uint16_t x, y;
-  while (millis() - t0 < PRUEBA_MS) {
-    if (tft.getTouch(&x, &y)) { while (tft.getTouch(&x, &y)) delay(20); break; }
-    bool f = parpOn(); if (f != on) { on = f; pinta(on); }
-    delay(20);
-  }
-#endif
-}
-
 void setup() {
   Serial.begin(115200);
   Serial.println("RADAR CDSN " VERSION);
@@ -123,7 +87,8 @@ void setup() {
   if (pDatos) Serial.printf("Tabla para %d sistemas (%u bytes), RAM libre %u (bloque mayor %u)\n", pDatos->cap,
                             (unsigned)(pDatos->cap * sizeof(Sis)), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   pinMode(BOTON_BOOT, INPUT_PULLUP);
-  tft.init(); tft.setRotation(GIRAR_180 ? 3 : 1); tft.setTouch(CAL);
+  cargaWifi();                                     // WiFi y giro: de mi_wifi.h o los guardados en la placa
+  tft.init(); tft.setRotation(girar ? 3 : 1); tft.setTouch(CAL);
   colores();
   if (!pDatos) {                                   // sin memoria para la tabla: se dice y se para
     tft.fillScreen(TFT_BLACK); tft.setTextColor(ROJO); tft.setTextDatum(MC_DATUM);
@@ -134,11 +99,16 @@ void setup() {
   preparaTablas();
   preparaSprite();
   presentacion();
-  pruebaColores();
-  tft.fillScreen(TFT_BLACK);
-  titulo("RADAR CDSN", "conectando WiFi...");
-  tft.setTextColor(NAR_MED); tft.setTextDatum(MC_DATUM);
-  tft.drawString(WIFI_NOMBRE, ANCHO / 2, 160, 4);
+  iniciaFS();
+  if (leeCache()) {                                // datos guardados: el mapa sale ya, y se actualiza al descargar
+    hayDatos = true; vistaPorDefecto(); marcaNuevas(); ordenaAlertas(); revisaAtaques();
+    pantallaMapa(); titulo("RADAR CDSN", "conectando WiFi...");
+  } else {
+    tft.fillScreen(TFT_BLACK);
+    titulo("RADAR CDSN", "conectando WiFi...");
+    tft.setTextColor(NAR_MED); tft.setTextDatum(MC_DATUM);
+    tft.drawString(wifiNom, ANCHO / 2, 160, 4);
+  }
   if (conectaWifi()) {
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.google.com");
     for (int i = 0; i < 20 && !ahora(); i++) delay(250);
@@ -161,14 +131,14 @@ void loop() {
   static uint16_t ux, uy;                          // ultimo punto tocado
   uint16_t x, y;
   bool t = tft.getTouch(&x, &y);
-  if (t && GIRAR_180) { x = ANCHO - 1 - x; y = ALTO - 1 - y; }   // el tactil se calibro sin girar
+  if (t && girar) { x = ANCHO - 1 - x; y = ALTO - 1 - y; }   // el tactil se calibro sin girar
   if (t) { ux = x; uy = y; tSuelta = m; }
   if (t) tUltToque = m;
   if (t && !tocando) { tocando = true; tToque = m; largo = false;
     if (modo == APAGADA) { largo = true; pantallaMapa(); }
     else if (carrusel) { largo = true; if (modo != MAPA) pantallaMapa(); }   // el toque solo quita el salvapantallas
     carrusel = false; }
-  if (t && tocando && !largo && m - tToque > 1500) { largo = true; apagar(); }
+  if (t && tocando && !largo && m - tToque > 1500) { largo = true; if (uy < TIT_H + 6 && modo != ESTADO) pantallaEstado(); else apagar(); }   // largo en el titulo = ESTADO; en el resto = negro
   if (!t && tocando && m - tSuelta > 80) { tocando = false; if (!largo && modo != APAGADA) toque(ux, uy); }
 
   // descarga cada 10 min
