@@ -16,7 +16,7 @@ void eligeEtiquetas() {
     if (pasada == 2 && zoom < zoomDef + 3) break;
     for (int i = 0; i < datos.n; i++) {
       Sis &s = datos.s[i];
-      bool toca = pasada == 0 ? s.nivel > 0 : pasada == 1 ? (s.ctrl && !s.nivel) : (!s.ctrl && !s.nivel);
+      bool toca = pasada == 0 ? s.nivel > 1 : pasada == 1 ? ((s.ctrl && !s.nivel) || s.nivel == 1) : (!s.ctrl && !s.nivel);   // avisos leves: con zoom
       if (!toca || !dentro(s.sx, s.sy, MX, MY, MW, MH)) continue;
       int x = s.sx + (s.nivel ? 16 : 9), y = s.sy - 4, w = s.anchoLab;
       bool choca = false;
@@ -39,6 +39,8 @@ void calculaPantalla() {
     s.anchoLab = min((int)strlen(s.nom) * 6, 255);
   }
   eligeEtiquetas();
+  nExp = 0; for (int i = 0; i < datos.n; i++) if (datos.s[i].exp) nExp++;
+  if (!nExp) verExp = false;
 }
 
 float mediana(float *v, int n) {
@@ -115,9 +117,9 @@ void pintaSistema(TFT_eSprite &g, int oy, const Sis &s, bool iluminado) {
   if (s.ctrl) g.fillRect(x - 3, y - 3, 7, 7, c);
   else g.fillCircle(x, y, 2, c);
   uint8_t ct = iTono(s.tono);
-  bool aro = !s.parpadea || parpOn();             // conflicto en marcha: el aro parpadea
-  if (s.nivel == 1 && aro) { g.drawCircle(x, y, 10, ct); g.drawCircle(x, y, 11, ct); }
-  if (s.nivel == 2 && aro) { g.drawCircle(x, y, radioAro, ct); g.drawCircle(x, y, radioAro + 1, ct); }
+  bool fuerte = !s.parpadea || parpOn();          // conflicto en marcha: el aro parpadea (se atenua: queda fino, no se apaga)
+  if (s.nivel == 1 || (s.exp && verExp)) g.drawCircle(x, y, 8, ct);   // aviso leve: aro fino
+  if (s.nivel == 2) { g.drawCircle(x, y, radioAro, ct); if (fuerte) g.drawCircle(x, y, radioAro + 1, ct); }
   if (s.lab) {
     g.setTextColor(s.nivel ? ct : s.ctrl ? I_BLANCO : I_NMED);
     g.setTextDatum(ML_DATUM);
@@ -138,6 +140,12 @@ void pintaMitad(TFT_eSprite &g, int oy) {
     pintaSistema(g, oy, s, d < 2 * PASO && s.dist <= R);
   }
   char t[24];
+  if (nExp) {                                      // franja EXPANSION PEND. (se toca para ver u ocultar sus aros)
+    int y = EXP_Y - oy;
+    if (verExp) g.fillRect(EXP_X, y, EXP_W, EXP_H, I_NAR); else { g.fillRect(EXP_X, y, EXP_W, EXP_H, I_FONDO); g.drawRect(EXP_X, y, EXP_W, EXP_H, I_NAR); }
+    snprintf(t, sizeof t, "EXPANSION PEND. %d", nExp);
+    g.setTextColor(verExp ? I_FONDO : I_NAR); g.setTextDatum(MC_DATUM); g.drawString(t, EXP_X + EXP_W / 2, y + EXP_H / 2 + 1, 1);
+  }
   g.setTextColor(I_REJ);
   g.setTextDatum(BL_DATUM); g.drawString(VERSION, 3, MH - 2 - oy, 1);
   snprintf(t, sizeof t, "anillo %.0f ly", R / 3.0f / ZOOMS[zoom]);

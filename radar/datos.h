@@ -16,7 +16,7 @@ struct Fac { char n[24]; float inf; };
 // (los conflictos en marcha ademas parpadean: campo "parpadea")
 enum Tono : uint8_t {
   TN_NADA,       // sin aviso
-  TN_AVISO,      // naranja: actividad inusual, bajada, expansion pendiente
+  TN_AVISO,      // naranja: actividad inusual, bajada (y expansion pendiente, que no es alerta: ver "exp")
   TN_DISPUTA,    // amarillo (texto negro): conflicto empatado
   TN_FAVOR,      // verde: defensa en curso, a un dia de ganar, victoria segura, actividad a favor
   TN_GRAVE,      // rojo: posible ataque, retirada, ventaja baja, dia decisivo, sistema en derrota
@@ -43,6 +43,7 @@ struct Sis {
   uint8_t tono;          // color del aviso (Tono)
   uint8_t icono;         // Icono: espadas (guerra) o sobre (elecciones)
   bool parpadea;         // conflicto en marcha: el aviso parpadea
+  bool exp;              // expansion pendiente: es de toda la faccion, no cuenta como alerta (v2.7)
   bool alarma;           // sale la pantalla grande de alerta (posible ataque, dia decisivo, sistema en derrota)
   int8_t dia;            // dia del conflicto (1..7, 0 = no se sabe) y si es exacto (lo cuenta el escucha v10)
   bool diaExacto;
@@ -300,7 +301,7 @@ static void calculaAlerta(Sis &s, JsonObjectConst o) {
     if (seg > 0) { ascii(tmp, o["segunda"] | "?", sizeof tmp);
       if (s.inf >= seg) snprintf(s.aviso, sizeof s.aviso, "ventaja de %.1f sobre %s", s.inf - seg, tmp);
       else snprintf(s.aviso, sizeof s.aviso, "a %.1f puntos de %s", seg - s.inf, tmp); }
-    s.nivel = 1; s.tono = TN_AVISO; return;
+    s.exp = true; s.tono = TN_AVISO; return;    // nivel 0: no es alerta; el mapa la enseña con la franja
   }
 }
 
