@@ -214,7 +214,8 @@ void tickAlerta(uint32_t m) {                      // latido del marco
 
 // Tras cada descarga: si hay una alarma que no estaba antes (o ha cambiado, p. ej. de DERROTA a DIA DECISIVO),
 // sale la alerta (enciende la pantalla si estaba en negro)
-void revisaAtaques(bool primera) {   // primera descarga: se apuntan sin saltar a la alerta (el radar arranca en el mapa)
+void revisaAtaques() {   // la primera vez (datos guardados o primera descarga) solo se apuntan: el radar arranca en el mapa
+  static bool listos = false; bool primera = !listos; listos = true;
   uint32_t ahoraH[MAX_SIS]; int na = 0, nuevo = -1;
   for (int i = 0; i < datos.n; i++) if (datos.s[i].alarma) {
     uint32_t h = hashNombre(datos.s[i].nom) ^ (hashNombre(datos.s[i].alerta) * 31u); ahoraH[na++] = h;

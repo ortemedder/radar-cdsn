@@ -26,6 +26,7 @@ void titulo(const char *izq, const char *extra) {
   tft.drawString(t, ANCHO - 4, 6, 2);
   tft.drawFastHLine(0, TIT_H, ANCHO, NAR_OSC);
   if (esMapa) iconoWifi(estadoWifi);
+  if (esMapa && hayNueva()) { tft.setTextColor(VERDE); tft.setTextDatum(TL_DATUM); tft.drawString(verGit, WIFI_X + 30, 6, 2); }   // version nueva: ver ESTADO
 }
 
 // ---------- alertas nuevas ----------

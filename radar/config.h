@@ -4,9 +4,12 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <TFT_eSPI.h>
+#include <LittleFS.h>
+#include <Preferences.h>
+#include <HTTPUpdate.h>
 #include "datos.h"
 
-#define VERSION "v2.7"      // subir el numero en cada cambio
+#define VERSION "v2.8"      // subir el numero en cada cambio
 #if CONFIG_IDF_TARGET_ESP32S3
 #error "Este radar es para el ESP32 normal: Herramientas -> Placa -> ESP32 Dev Module"
 #endif
@@ -63,12 +66,6 @@ const uint32_t CARRUSEL_ESPERA = 5UL * 60 * 1000;
 const uint32_t CAR_MAPA_S = 120, CAR_VIS_S = 60, CAR_RES_S = 60;   // segundos de cada pantalla
 const uint32_t CAR_ALE_S = 30;                     // alerta de posible ataque (solo mientras haya alguno)
 
-// pantalla de prueba de colores al arrancar (0 = no sale)
-#ifndef PRUEBA_COLORES
-#define PRUEBA_COLORES 1
-#endif
-const uint32_t PRUEBA_MS = 8000;                   // cuanto dura (un toque la quita antes)
-
 // barrido
 const int N_ESTELA = 14, PASO = 4;                 // grados por paso; 90 pasos = 1 vuelta
 const uint32_t MS_PASO = 4000 / (360 / PASO);      // una vuelta cada 4 s
@@ -83,7 +80,7 @@ uint16_t estela[N_ESTELA];
 float SENO[360], COSENO[360];                      // tablas: se calculan una vez
 
 // ---------- estado ----------
-enum Modo : uint8_t { MAPA, FICHA, LISTA, VISITAS, RESUMEN, ALERTA, APAGADA };
+enum Modo : uint8_t { MAPA, FICHA, LISTA, VISITAS, RESUMEN, ALERTA, ESTADO, APAGADA };
 Modo modo = MAPA;
 int zoomDef = 6, zoom = 6;
 float centroX = 0, centroZ = 0, defX = 0, defZ = 0;
@@ -103,6 +100,11 @@ uint32_t tUltToque = 0, tCarrusel = 0;
 uint32_t ataqAntes[MAX_SIS]; int nAtaqAntes = 0;   // posibles ataques de la descarga anterior (hash del nombre)
 uint32_t alertaHash = 0;                           // sistema que sale en la pantalla de alerta
 bool alertaFija = false;                           // alerta nueva: se queda hasta pulsar VISTO o VER FICHA
+// v2.8: WiFi guardado en la placa, datos guardados, OTA y pantalla ESTADO
+char wifiNom[33] = "", wifiClave[65] = ""; bool girar = GIRAR_180;
+long cacheT = 0, tUltOk = 0; bool desdeCache = false; // datos guardados en la placa y ultima descarga buena
+uint16_t descOk = 0, descFallos = 0; int rssiUlt = 0; // contadores y senal WiFi de la ultima conexion
+char verGit[12] = ""; uint32_t tVer = 0;            // version publicada en GitHub (firmware/version.txt)
 bool verExp = false; int nExp = 0;                 // expansion pendiente (de toda la faccion): sus aros solo si se toca la franja
 const int EXP_X = 4, EXP_Y = 4, EXP_W = 126, EXP_H = 14;   // franja EXPANSION PEND. (esquina del mapa, coordenadas del mapa)
 
@@ -110,5 +112,5 @@ const int EXP_X = 4, EXP_Y = 4, EXP_W = 126, EXP_H = 14;   // franja EXPANSION P
 void pantallaMapa(); void pantallaFicha(int i); void pantallaLista(); void panel();
 void pantallaVisitas(); void pantallaResumen(bool mover); void pantallaAlerta();
 void titulo(const char *izq, const char *extra = nullptr);
-void ordenaAlertas(); void iconoWifi(int e); void revisaAtaques(bool primera);
+void ordenaAlertas(); void iconoWifi(int e); void revisaAtaques(); void pantallaEstado(); bool hayNueva(); void miraVersion(); void guardaCache();
 bool parpOn(); void bandaFicha(const Sis &s, bool on);

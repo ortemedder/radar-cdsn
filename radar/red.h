@@ -5,10 +5,11 @@ bool conectaWifi() {
   if (WiFi.status() == WL_CONNECTED) { iconoWifi(2); return true; }
   iconoWifi(1);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_NOMBRE, WIFI_CLAVE);
+  WiFi.begin(wifiNom, wifiClave);
   for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) delay(250);
   bool ok = WiFi.status() == WL_CONNECTED;
   iconoWifi(ok ? 2 : 0);
+  if (ok) { delay(300); rssiUlt = WiFi.RSSI(); }   // un respiro para que la red (DNS) este lista
   return ok;
 }
 
@@ -34,6 +35,8 @@ bool descarga() {
   flujo.setTimeout(10000);                         // 10 s sin datos = corte
   bool ok = cargaDatos(datos, flujo, hoy, ultimoError, sizeof ultimoError);
   http.end();
+  cli.stop();
+  if (ok) miraVersion();                           // de paso, mira si hay version nueva (cada 6 h)
   apagaWifi();                                   // descarga hecha: WiFi apagado hasta la proxima
   if (ok) ultimoError[0] = 0;
   Serial.printf("Descarga %s: %d sistemas, %d alertas, RAM libre %u\n", ok ? "OK" : ultimoError, datos.n, datos.alertas, ESP.getFreeHeap());
@@ -42,15 +45,20 @@ bool descarga() {
 
 void actualiza(bool primera) {
   if (modo == MAPA && !primera) titulo("RADAR CDSN", "actualizando...");
-  bool sinDatos = !hayDatos;                       // primera descarga buena: arranca en el mapa (sin saltar a la alerta)
   bool ok = descarga();
+  for (int r = 1; !ok && r <= 2; r++) {            // si falla, reintenta enseguida (2 veces, cada 3 s)
+    if (modo == MAPA && hayDatos) titulo("RADAR CDSN", "reintentando...");
+    else if (!hayDatos) { tft.fillRect(0, 140, ANCHO, 40, TFT_BLACK); tft.setTextColor(NAR_MED); tft.setTextDatum(MC_DATUM); tft.drawString("descargando...", ANCHO / 2, 160, 4); }
+    delay(3000); ok = descarga();
+  }
+  if (ok) { descOk++; tUltOk = ahora(); guardaCache(); } else descFallos++;
   tDescarga = ok ? millis() : millis() - CADA_MS + REINTENTO_MS;   // si falla, otra vez en 1 min
   if (ok && !hayDatos) { hayDatos = true; vistaPorDefecto(); }
   int recientes = ok ? marcaNuevas() : 0;
   if (ok) ordenaAlertas();
   if (recientes && modo != APAGADA) destello();
   if (recientes && carrusel) { tCarrusel = millis(); modo = MAPA; }   // alerta nueva: el carrusel vuelve al mapa
-  if (ok) revisaAtaques(sinDatos);                         // posible ataque nuevo: pantalla de alerta (aunque estuviera en negro)
+  if (ok) revisaAtaques();                         // posible ataque nuevo: pantalla de alerta (aunque estuviera en negro)
   if (!hayDatos) {
     tft.fillScreen(TFT_BLACK); titulo("RADAR CDSN");
     tft.setTextColor(ROJO); tft.setTextDatum(MC_DATUM);
@@ -64,5 +72,6 @@ void actualiza(bool primera) {
   else if (modo == VISITAS) pantallaVisitas();
   else if (modo == RESUMEN) pantallaResumen(false);
   else if (modo == ALERTA) pantallaAlerta();
+  else if (modo == ESTADO) pantallaEstado();
   if (!ok && modo == MAPA) titulo("RADAR CDSN", ultimoError);
 }
