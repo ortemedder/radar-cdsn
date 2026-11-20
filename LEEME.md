@@ -38,7 +38,7 @@ Señales a 3,3 V: compatibles directamente. Nunca 5 V a un pin de datos.
   Poner el nombre y la clave del WiFi (2,4 GHz) al principio de `radar.ino`.
   Lee faccion.json con filtro (solo lo que se pinta, ~50 KB de RAM).
 - Alertas: guerra/elecciones activas o pendientes, retirada, ventaja < 5 puntos en un controlado, POSIBLE ATAQUE (graves, aro ROJO que late);
-  bajada ≥ 3 puntos desde ayer, ACTIVIDAD INUSUAL y expansión pendiente (avisos, aro AMARILLO fijo).
+  bajada ≥ 3 puntos desde ayer y ACTIVIDAD INUSUAL (avisos leves, aro fino; nombre con zoom). La expansión pendiente (de toda la facción) sale en la franja EXPANSION PEND. de la esquina del mapa: al tocarla se ven u ocultan sus aros (v2.7).
 - Manejo: tocar sistema o caja de alerta = ficha; tocar vacío = centrar ahí; + / − zoom; C = vista inicial;
   BOOT = pausa del barrido; pulsación larga (1,5 s) = pantalla en negro (otro toque la enciende); la ficha vuelve sola al minuto.
 

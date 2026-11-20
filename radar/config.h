@@ -6,7 +6,7 @@
 #include <TFT_eSPI.h>
 #include "datos.h"
 
-#define VERSION "v2.6.1"      // subir el numero en cada cambio
+#define VERSION "v2.7"      // subir el numero en cada cambio
 #if CONFIG_IDF_TARGET_ESP32S3
 #error "Este radar es para el ESP32 normal: Herramientas -> Placa -> ESP32 Dev Module"
 #endif
@@ -103,10 +103,12 @@ uint32_t tUltToque = 0, tCarrusel = 0;
 uint32_t ataqAntes[MAX_SIS]; int nAtaqAntes = 0;   // posibles ataques de la descarga anterior (hash del nombre)
 uint32_t alertaHash = 0;                           // sistema que sale en la pantalla de alerta
 bool alertaFija = false;                           // alerta nueva: se queda hasta pulsar VISTO o VER FICHA
+bool verExp = false; int nExp = 0;                 // expansion pendiente (de toda la faccion): sus aros solo si se toca la franja
+const int EXP_X = 4, EXP_Y = 4, EXP_W = 126, EXP_H = 14;   // franja EXPANSION PEND. (esquina del mapa, coordenadas del mapa)
 
 // ---------- funciones que se usan antes de definirse ----------
 void pantallaMapa(); void pantallaFicha(int i); void pantallaLista(); void panel();
-void pantallaVisitas(); void pantallaResumen(bool mover); void pantallaAlerta(); void revisaAtaques();
+void pantallaVisitas(); void pantallaResumen(bool mover); void pantallaAlerta();
 void titulo(const char *izq, const char *extra = nullptr);
-void ordenaAlertas(); void iconoWifi(int e);
+void ordenaAlertas(); void iconoWifi(int e); void revisaAtaques(bool primera);
 bool parpOn(); void bandaFicha(const Sis &s, bool on);

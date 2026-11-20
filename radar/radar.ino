@@ -33,6 +33,9 @@ void toque(int x, int y) {
     int i = orden[pagAlerta * AL_N + k];
     if (i >= 0 && dentro(x, y, PX, AL_Y + k * AL_PASO, PW, AL_H + 2)) { pantallaFicha(i); return; }
   }
+  if (nExp && dentro(x, y, MX + EXP_X - 4, MY + EXP_Y - 4, EXP_W + 8, EXP_H + 8)) {   // franja de expansion: ver / ocultar sus aros
+    verExp = !verExp; calculaPantalla(); dibujaMapaEntero(); return;
+  }
   if (dentro(x, y, MX, MY, MW, MH)) {              // mapa: sistema o centrar ahi
     int i = sistemaEn(x, y);
     if (i >= 0) { pantallaFicha(i); return; }
