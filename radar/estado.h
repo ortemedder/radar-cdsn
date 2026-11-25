@@ -24,6 +24,7 @@ struct CabCache {
   uint32_t magia; uint16_t tamSis; char ver[12];
   int n, sinSitio; long t, tickGlobal;
   int controlados, alertas, trafHoy, ataques, inusuales, favor, alarmas;
+  int ctrlFuera;
 };
 bool fsOk = false;
 
@@ -35,7 +36,7 @@ void guardaCache() {
   c.magia = MAGIA; c.tamSis = sizeof(Sis); strncpy(c.ver, VERSION, sizeof c.ver - 1);
   c.n = datos.n; c.sinSitio = datos.sinSitio; c.t = datos.t; c.tickGlobal = datos.tickGlobal;
   c.controlados = datos.controlados; c.alertas = datos.alertas; c.trafHoy = datos.trafHoy; c.ataques = datos.ataques;
-  c.inusuales = datos.inusuales; c.favor = datos.favor; c.alarmas = datos.alarmas;
+  c.inusuales = datos.inusuales; c.favor = datos.favor; c.alarmas = datos.alarmas; c.ctrlFuera = datos.ctrlFuera;
   fs::File f = LittleFS.open("/datos.tmp", "w"); if (!f) return;
   bool ok = f.write((uint8_t *)&c, sizeof c) == sizeof c && f.write((uint8_t *)datos.s, datos.n * sizeof(Sis)) == datos.n * sizeof(Sis);
   f.close();
@@ -55,7 +56,7 @@ bool leeCache() {
   if (!ok) return false;                           // de otra version o roto: se espera a la descarga
   datos.n = c.n; datos.sinSitio = c.sinSitio; datos.t = c.t; datos.tickGlobal = c.tickGlobal;
   datos.controlados = c.controlados; datos.alertas = c.alertas; datos.trafHoy = c.trafHoy; datos.ataques = c.ataques;
-  datos.inusuales = c.inusuales; datos.favor = c.favor; datos.alarmas = c.alarmas;
+  datos.inusuales = c.inusuales; datos.favor = c.favor; datos.alarmas = c.alarmas; datos.ctrlFuera = c.ctrlFuera;
   for (int i = 0; i < datos.n; i++) datos.s[i].nueva = false;
   cacheT = c.t; desdeCache = true;
   return true;
