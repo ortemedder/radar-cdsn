@@ -110,7 +110,7 @@ void pantallaResumen(bool mover) {
   } else { tft.setTextColor(NAR_MED); tft.drawString("PROX. TICK: aprendiendo...", ANCHO / 2 + ox, 152 + oy, 4); }
   // cifras
   int graves = 0; for (int i = 0; i < datos.n; i++) graves += datos.s[i].tono == TN_GRAVE;
-  snprintf(t, sizeof t, "%d de %d", datos.controlados, datos.n);
+  snprintf(t, sizeof t, "%d de %d", datos.controlados + datos.ctrlFuera, datos.n + datos.sinSitio);   // v2.9: totales reales
   cajaResumen(14 + ox, 196 + oy, "CONTROLADOS", t, BLANCO);
   snprintf(t, sizeof t, "%d", datos.alertas);
   cajaResumen(166 + ox, 196 + oy, graves ? "ALERTAS (graves)" : "ALERTAS", t, graves ? ROJO : datos.alertas ? AMAR : VERDE);
@@ -129,8 +129,8 @@ void pantallaResumen(bool mover) {
     corta(u, t, 460, 2); tft.setTextColor(BLANCO); tft.drawString(u, ANCHO / 2 + ox, 288 + oy, 2);
   } else { tft.setTextColor(VERDE); tft.drawString("Sin picos de visitas", ANCHO / 2 + ox, 278 + oy, 2); }
   if (datos.sinSitio) {                            // la faccion ya no cabe en la tabla
-    snprintf(t, sizeof t, "LIMITE: %d sistemas sin sitio (caben %d)", datos.sinSitio, datos.cap);
-    tft.setTextColor(ROJO); tft.drawString(t, ANCHO / 2, 310, 1);
+    snprintf(t, sizeof t, "En el radar %d de %d sistemas (los mas importantes)", datos.n, datos.n + datos.sinSitio);
+    tft.setTextColor(NAR_MED); tft.drawString(t, ANCHO / 2, 310, 1);
   }
 }
 

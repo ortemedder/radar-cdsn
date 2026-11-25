@@ -133,7 +133,7 @@ void panel() {
   char t[64];
   tft.setTextDatum(TL_DATUM); tft.setTextColor(VERDE);
   tft.drawString("CONTROLADOS >", PX + 2, CTRL_Y, 2);
-  snprintf(t, sizeof t, "%d de %d", datos.controlados, datos.n);
+  snprintf(t, sizeof t, "%d de %d", datos.controlados + datos.ctrlFuera, datos.n + datos.sinSitio);   // v2.9: totales reales
   tft.setTextDatum(TR_DATUM); tft.setTextColor(BLANCO);
   tft.drawString(t, ANCHO - 4, CTRL_Y + 16, 4);
 

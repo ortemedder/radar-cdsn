@@ -69,6 +69,7 @@ struct Sis {
 struct Datos {
   Sis *s = nullptr; int cap = 0;   // tabla de sistemas (se reserva aparte) y cuantos caben
   int n = 0, sinSitio = 0;         // sistemas leidos y los que no cupieron
+  int ctrlFuera = 0;               // v2.9: controlados entre los que no cupieron (para el total real)
   long t = 0;            // hora del archivo
   long tickGlobal = 0;   // ultimo tick de la galaxia (tick.edcd.io, via el escucha)
   int controlados = 0, alertas = 0, trafHoy = 0, ataques = 0, inusuales = 0, favor = 0;
@@ -351,7 +352,7 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
   if (!L.busca("\"sistemas\"") || L.salta() != ':' || L.salta() != '{') { snprintf(err, errmax, "JSON: sin sistemas"); return false; }
   JsonDocument filtro; preparaFiltro(filtro);
   JsonDocument doc;                                  // un solo sistema cada vez
-  int n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, fav = 0, sin = 0, ala = 0;
+  int cf = 0, n = 0, ctrl = 0, al = 0, traf = 0, at = 0, inu = 0, fav = 0, sin = 0, ala = 0;
   char clave[48];
   while (true) {
     int c = L.salta();
@@ -366,7 +367,7 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
     if (e) { snprintf(err, errmax, "JSON %s: %s", clave, e.c_str()); return false; }
     JsonObjectConst o = doc.as<JsonObjectConst>();
     if ((o["fuera"] | false) || o["inf"].isNull()) continue;   // ya no esta la faccion
-    if (n >= d.cap) { sin++; continue; }                        // no cabe: se cuenta para avisar
+    if (n >= d.cap) { sin++; cf += (o["ctrl"] | false); continue; }   // no cabe: se cuenta (el escucha v12.1 manda primero los importantes)
     Sis &s = d.s[n];
     llenaSistema(s, o, clave, hoy);
     ctrl += s.ctrl; al += s.nivel > 0; traf += s.trafHoy; at += s.ataque == 2; inu += s.ataque == 1; fav += s.ataque == 3; ala += s.alarma;
@@ -376,7 +377,7 @@ static bool cargaDatos(Datos &d, Fuente &in, const char *hoy, char *err, size_t 
   long t = 0, tg = 0;
   if (L.busca("\"t\"") && L.salta() == ':') t = (long)L.numero();
   if (L.busca("\"tick_global\"") && L.salta() == ':') tg = (long)L.numero();
-  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.favor = fav; d.alarmas = ala; d.sinSitio = sin;
+  d.n = n; d.controlados = ctrl; d.alertas = al; d.trafHoy = traf; d.ataques = at; d.inusuales = inu; d.favor = fav; d.alarmas = ala; d.sinSitio = sin; d.ctrlFuera = cf;
   d.t = t; d.tickGlobal = tg;
   return true;
 }
